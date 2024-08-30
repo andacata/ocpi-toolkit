@@ -18,9 +18,9 @@ import com.izivia.ocpi.toolkit.modules.tokens.domain.TokenType
  */
 @Partial
 data class CdrToken(
-    val countryCode: CiString,
-    val partyId: CiString,
+    val countryCode: CiString?,
+    val partyId: CiString?,
     val uid: CiString,
     val type: TokenType,
-    val contractId: CiString
+    val contractId: CiString?
 )
