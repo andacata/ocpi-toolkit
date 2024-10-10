@@ -12,19 +12,19 @@ import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 /**
  * Sends calls to an eMSP server
  * @property transportClientBuilder used to build transport client
- * @property serverVersionsEndpointUrl used to know which partner to communicate with
+ * @property partnerId used to know which partner to communicate with
  * @property partnerRepository used to get information about the partner (endpoint, token)
  */
 class CdrsCpoClient(
     private val transportClientBuilder: TransportClientBuilder,
-    private val serverVersionsEndpointUrl: String,
-    private val partnerRepository: PartnerRepository
+    private val partnerId: String,
+    private val partnerRepository: PartnerRepository,
 ) : CdrsEmspInterface<URL> {
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
             module = ModuleID.cdrs,
-            partnerUrl = serverVersionsEndpointUrl,
-            partnerRepository = partnerRepository
+            partnerId = partnerId,
+            partnerRepository = partnerRepository,
         )
 
     override suspend fun getCdr(param: URL): OcpiResponseBody<Cdr?> =
@@ -32,12 +32,12 @@ class CdrsCpoClient(
             send(
                 HttpRequest(
                     method = HttpMethod.GET,
-                    path = "/"
+                    path = "/",
                 ).withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
                 .parseBody()
         }
@@ -47,12 +47,12 @@ class CdrsCpoClient(
             send(
                 HttpRequest(
                     method = HttpMethod.POST,
-                    body = mapper.writeValueAsString(cdr)
+                    body = mapper.writeValueAsString(cdr),
                 ).withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
                 .parseBody()
         }

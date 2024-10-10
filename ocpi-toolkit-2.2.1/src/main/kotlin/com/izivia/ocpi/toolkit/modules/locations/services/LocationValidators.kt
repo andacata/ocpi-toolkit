@@ -84,8 +84,8 @@ fun RegularHoursPartial.validate(): RegularHoursPartial = validate(this) { regul
         constraintViolations.add(
             DefaultConstraintViolation(
                 property = "periodBegin ($periodBegin) is after periodEnd ($periodEnd)",
-                constraint = Greater(endInMinutes)
-            )
+                constraint = Greater(endInMinutes),
+            ),
         )
     }
 }
@@ -95,15 +95,15 @@ fun HoursPartial.validate(): HoursPartial = validate(this) { hours ->
         constraintViolations.add(
             DefaultConstraintViolation(
                 property = "regularHours is not set whereas twentyFourSeven is false",
-                constraint = RegularHoursSetWhenNotTwentyFourSevenConstraint()
-            )
+                constraint = RegularHoursSetWhenNotTwentyFourSevenConstraint(),
+            ),
         )
     } else if (hours.regularHours != null && hours.twentyfourseven == true) {
         constraintViolations.add(
             DefaultConstraintViolation(
                 property = "twentyfourseven is set to true whereas regularHours are set",
-                constraint = RegularHoursSetAtTheSameTimeAsTwentyFourSevenConstraint()
-            )
+                constraint = RegularHoursSetAtTheSameTimeAsTwentyFourSevenConstraint(),
+            ),
         )
     }
 
@@ -175,16 +175,16 @@ fun ConnectorPartial.validate(): ConnectorPartial = validate(this) {
             constraintViolations.add(
                 DefaultConstraintViolation(
                     property = "tariffIds",
-                    constraint = MaxLengthContraint(36)
-                )
+                    constraint = MaxLengthContraint(36),
+                ),
             )
         }
         if (!tariffId.isPrintableAscii()) {
             constraintViolations.add(
                 DefaultConstraintViolation(
                     property = "tariffIds",
-                    constraint = PrintableAsciiConstraint()
-                )
+                    constraint = PrintableAsciiConstraint(),
+                ),
             )
         }
     }
@@ -195,45 +195,59 @@ fun ConnectorPartial.validate(): ConnectorPartial = validate(this) {
 fun Location.validate(): Location = validate(this) {
     toPartial().validate()
 }
+
 fun EnvironmentalImpact.validate(): EnvironmentalImpact = validate(this) {
     toPartial().validate()
 }
+
 fun EnergySource.validate(): EnergySource = validate(this) {
     toPartial().validate()
 }
+
 fun EnergyMix.validate(): EnergyMix = validate(this) {
     toPartial().validate()
 }
+
 fun ExceptionalPeriod.validate(): ExceptionalPeriod = validate(this) {
     toPartial().validate()
 }
+
 fun RegularHours.validate(): RegularHours = validate(this) {
     toPartial().validate()
 }
-fun Hours.validate(): Hours = validate(this) { hours ->
+
+fun Hours.validate(): Hours = validate(this) {
     toPartial().validate()
 }
+
 fun Image.validate(): Image = validate(this) {
     toPartial().validate()
 }
+
 fun BusinessDetails.validate(): BusinessDetails = validate(this) {
     toPartial().validate()
 }
+
 fun GeoLocation.validate(): GeoLocation = validate(this) {
     toPartial().validate()
 }
+
 fun AdditionalGeoLocation.validate(): AdditionalGeoLocation = validate(this) {
     toPartial().validate()
 }
+
 fun DisplayText.validate(): DisplayText = validate(this) {
     toPartial().validate()
 }
+
 fun StatusSchedule.validate(): StatusSchedule = validate(this) {
     toPartial().validate()
 }
+
 fun Evse.validate(): Evse = validate(this) {
     toPartial().validate()
 }
+
 fun Connector.validate(): Connector = validate(this) {
     toPartial().validate()
 }

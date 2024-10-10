@@ -15,27 +15,27 @@ import java.time.Instant
 /**
  * Sends calls to the CPO
  * @property transportClientBuilder used to build transport client
- * @property serverVersionsEndpointUrl used to know which partner to communicate with
+ * @property partnerId used to know which partner to communicate with
  * @property partnerRepository used to get information about the partner (endpoint, token)
  */
 class LocationsEmspClient(
     private val transportClientBuilder: TransportClientBuilder,
-    private val serverVersionsEndpointUrl: String,
-    private val partnerRepository: PartnerRepository
+    private val partnerId: String,
+    private val partnerRepository: PartnerRepository,
 ) : LocationsCpoInterface {
 
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
             module = ModuleID.locations,
-            partnerUrl = serverVersionsEndpointUrl,
-            partnerRepository = partnerRepository
+            partnerId = partnerId,
+            partnerRepository = partnerRepository,
         )
 
     override suspend fun getLocations(
         dateFrom: Instant?,
         dateTo: Instant?,
         offset: Int,
-        limit: Int?
+        limit: Int?,
     ): OcpiResponseBody<SearchResult<Location>> = with(buildTransport()) {
         send(
             HttpRequest(
@@ -44,38 +44,38 @@ class LocationsEmspClient(
                     dateFrom?.let { "date_from" to dateFrom.toString() },
                     dateTo?.let { "date_to" to dateTo.toString() },
                     "offset" to offset.toString(),
-                    limit?.let { "limit" to limit.toString() }
-                ).toMap()
+                    limit?.let { "limit" to limit.toString() },
+                ).toMap(),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
             .parsePaginatedBody(offset)
     }
 
     suspend fun getLocationsNextPage(
-        previousResponse: OcpiResponseBody<SearchResult<Location>>
+        previousResponse: OcpiResponseBody<SearchResult<Location>>,
     ): OcpiResponseBody<SearchResult<Location>>? = getNextPage(
         transportClientBuilder = transportClientBuilder,
-        serverVersionsEndpointUrl = serverVersionsEndpointUrl,
+        partnerId = partnerId,
         partnerRepository = partnerRepository,
-        previousResponse = previousResponse
+        previousResponse = previousResponse,
     )
 
     override suspend fun getLocation(locationId: CiString): OcpiResponseBody<Location?> = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.GET,
-                path = "/$locationId"
+                path = "/$locationId",
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
             .parseBody()
     }
@@ -85,13 +85,13 @@ class LocationsEmspClient(
             send(
                 HttpRequest(
                     method = HttpMethod.GET,
-                    path = "/$locationId/$evseUid"
+                    path = "/$locationId/$evseUid",
                 )
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
-                        correlationId = generateCorrelationId()
+                        correlationId = generateCorrelationId(),
                     )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
                 .parseBody()
         }
@@ -99,18 +99,18 @@ class LocationsEmspClient(
     override suspend fun getConnector(
         locationId: CiString,
         evseUid: CiString,
-        connectorId: CiString
+        connectorId: CiString,
     ): OcpiResponseBody<Connector?> = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.GET,
-                path = "/$locationId/$evseUid/$connectorId"
+                path = "/$locationId/$evseUid/$connectorId",
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
             .parseBody()
     }

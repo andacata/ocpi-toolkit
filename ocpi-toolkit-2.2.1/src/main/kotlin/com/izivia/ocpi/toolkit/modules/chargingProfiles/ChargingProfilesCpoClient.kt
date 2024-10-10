@@ -18,15 +18,15 @@ import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
  * Send calls to the SCSP
  *
  * @property transportClientBuilder used to build transport client
- * @property serverVersionsEndpointUrl used to know which partner to communicate with
+ * @property partnerId used to know which partner to communicate with
  * @property partnerRepository used to get information about the partner (endpoint, token)
  * @property callbackBaseUrl used to build the callback URL sent to the other partner
  */
 class ChargingProfilesCpoClient(
     private val transportClientBuilder: TransportClientBuilder,
-    private val serverVersionsEndpointUrl: String,
+    private val partnerId: String,
     private val partnerRepository: PartnerRepository,
-    private val callbackBaseUrl: String
+    private val callbackBaseUrl: String,
 ) {
 
     private fun buildCallbackTransport(): TransportClient =
@@ -35,25 +35,25 @@ class ChargingProfilesCpoClient(
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
             module = ModuleID.chargingprofiles,
-            partnerUrl = serverVersionsEndpointUrl,
-            partnerRepository = partnerRepository
+            partnerId = partnerId,
+            partnerRepository = partnerRepository,
         )
 
     suspend fun postCallbackActiveChargingProfile(
         responseUrl: String,
-        result: ActiveChargingProfileResult
+        result: ActiveChargingProfileResult,
     ): OcpiResponseBody<Any> = with(buildCallbackTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.POST,
                 path = responseUrl,
-                body = mapper.writeValueAsString(result)
+                body = mapper.writeValueAsString(result),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
             .also {
                 if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
@@ -63,19 +63,19 @@ class ChargingProfilesCpoClient(
 
     suspend fun postCallbackChargingProfile(
         responseUrl: String,
-        result: ChargingProfileResult
+        result: ChargingProfileResult,
     ): OcpiResponseBody<Any> = with(buildCallbackTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.POST,
                 path = responseUrl,
-                body = mapper.writeValueAsString(result)
+                body = mapper.writeValueAsString(result),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
             .also {
                 if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
@@ -85,19 +85,19 @@ class ChargingProfilesCpoClient(
 
     suspend fun postCallbackClearProfile(
         responseUrl: String,
-        result: ClearProfileResult
+        result: ClearProfileResult,
     ): OcpiResponseBody<Any> = with(buildCallbackTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.POST,
                 path = responseUrl,
-                body = mapper.writeValueAsString(result)
+                body = mapper.writeValueAsString(result),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
             .also {
                 if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
@@ -107,19 +107,19 @@ class ChargingProfilesCpoClient(
 
     suspend fun putActiveChargingProfile(
         sessionId: CiString,
-        activeChargingProfile: ActiveChargingProfile
+        activeChargingProfile: ActiveChargingProfile,
     ): OcpiResponseBody<Any> = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.PUT,
                 path = "/$sessionId",
-                body = mapper.writeValueAsString(activeChargingProfile)
+                body = mapper.writeValueAsString(activeChargingProfile),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
             .also {
                 if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")

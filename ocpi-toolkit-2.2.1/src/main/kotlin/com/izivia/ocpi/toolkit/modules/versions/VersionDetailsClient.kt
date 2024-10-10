@@ -10,13 +10,13 @@ import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 /**
  * Used to get the version details of a partner
  * @property transportClientBuilder used to build transport client
- * @property serverVersionsEndpointUrl used to know which partner to communicate with
+ * @property partnerId used to know which partner to communicate with
  * @property partnerRepository used to get information about the partner (endpoint, token)
  */
 class VersionDetailsClient(
     private val transportClientBuilder: TransportClientBuilder,
-    private val serverVersionsEndpointUrl: String,
-    private val partnerRepository: PartnerRepository
+    private val partnerId: String,
+    private val partnerRepository: PartnerRepository,
 ) : VersionDetailsInterface {
 
     override suspend fun getVersionDetails(): OcpiResponseBody<VersionDetails> =
@@ -24,22 +24,22 @@ class VersionDetailsClient(
             transportClientBuilder
                 .build(
                     baseUrl = partnerRepository
-                        .getVersion(partnerUrl = serverVersionsEndpointUrl)
+                        .getVersion(partnerId = partnerId)
                         ?.url
-                        ?: throw OcpiToolkitUnknownEndpointException("version details")
-                )
+                        ?: throw OcpiToolkitUnknownEndpointException("version details"),
+                ),
         ) {
             send(
                 HttpRequest(method = HttpMethod.GET)
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
-                        correlationId = generateCorrelationId()
+                        correlationId = generateCorrelationId(),
                     )
                     .authenticate(
                         partnerRepository = partnerRepository,
-                        partnerUrl = serverVersionsEndpointUrl,
-                        allowTokenA = true
-                    )
+                        partnerId = partnerId,
+                        allowTokenA = true,
+                    ),
             )
                 .parseBody()
         }

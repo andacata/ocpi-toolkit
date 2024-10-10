@@ -16,26 +16,26 @@ import java.time.Instant
 /**
  * Sends calls to an eMSP server
  * @property transportClientBuilder used to build transport client
- * @property serverVersionsEndpointUrl used to know which partner to communicate with
+ * @property partnerId used to know which partner to communicate with
  * @property partnerRepository used to get information about the partner (endpoint, token)
  */
 class TokensCpoClient(
     private val transportClientBuilder: TransportClientBuilder,
-    private val serverVersionsEndpointUrl: String,
-    private val partnerRepository: PartnerRepository
+    private val partnerId: String,
+    private val partnerRepository: PartnerRepository,
 ) : TokensEmspInterface {
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
             module = ModuleID.tokens,
-            partnerUrl = serverVersionsEndpointUrl,
-            partnerRepository = partnerRepository
+            partnerId = partnerId,
+            partnerRepository = partnerRepository,
         )
 
     override suspend fun getTokens(
         dateFrom: Instant?,
         dateTo: Instant?,
         offset: Int,
-        limit: Int?
+        limit: Int?,
     ): OcpiResponseBody<SearchResult<Token>> =
         with(buildTransport()) {
             send(
@@ -45,31 +45,31 @@ class TokensCpoClient(
                         dateFrom?.let { "date_from" to dateFrom.toString() },
                         dateTo?.let { "date_to" to dateTo.toString() },
                         "offset" to offset.toString(),
-                        limit?.let { "limit" to limit.toString() }
-                    ).toMap()
+                        limit?.let { "limit" to limit.toString() },
+                    ).toMap(),
                 )
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
-                        correlationId = generateCorrelationId()
+                        correlationId = generateCorrelationId(),
                     )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
                 .parsePaginatedBody(offset)
         }
 
     suspend fun getTokensNextPage(
-        previousResponse: OcpiResponseBody<SearchResult<Token>>
+        previousResponse: OcpiResponseBody<SearchResult<Token>>,
     ): OcpiResponseBody<SearchResult<Token>>? = getNextPage(
         transportClientBuilder = transportClientBuilder,
-        serverVersionsEndpointUrl = serverVersionsEndpointUrl,
+        partnerId = partnerId,
         partnerRepository = partnerRepository,
-        previousResponse = previousResponse
+        previousResponse = previousResponse,
     )
 
     override suspend fun postToken(
         tokenUid: CiString,
         type: TokenType?,
-        locationReferences: LocationReferences?
+        locationReferences: LocationReferences?,
     ): OcpiResponseBody<AuthorizationInfo> =
         with(buildTransport()) {
             send(
@@ -77,13 +77,13 @@ class TokensCpoClient(
                     method = HttpMethod.POST,
                     path = "/$tokenUid/authorize",
                     queryParams = listOfNotNull(type?.let { "type" to type.toString() }).toMap(),
-                    body = locationReferences.run(mapper::writeValueAsString)
+                    body = locationReferences.run(mapper::writeValueAsString),
                 )
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
-                        correlationId = generateCorrelationId()
+                        correlationId = generateCorrelationId(),
                     )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             ).parseBody()
         }
 }

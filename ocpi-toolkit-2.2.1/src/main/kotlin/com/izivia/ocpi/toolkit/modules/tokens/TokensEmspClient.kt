@@ -14,40 +14,40 @@ import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 /**
  * Sends calls to the CPO
  * @property transportClientBuilder used to build transport client
- * @property serverVersionsEndpointUrl used to know which partner to communicate with
+ * @property partnerId used to know which partner to communicate with
  * @property partnerRepository used to get information about the partner (endpoint, token)
  */
 class TokensEmspClient(
     private val transportClientBuilder: TransportClientBuilder,
-    private val serverVersionsEndpointUrl: String,
-    private val partnerRepository: PartnerRepository
+    private val partnerId: String,
+    private val partnerRepository: PartnerRepository,
 ) : TokensCpoInterface {
 
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
             module = ModuleID.tokens,
-            partnerUrl = serverVersionsEndpointUrl,
-            partnerRepository = partnerRepository
+            partnerId = partnerId,
+            partnerRepository = partnerRepository,
         )
 
     override suspend fun getToken(
         countryCode: CiString,
         partyId: CiString,
         tokenUid: CiString,
-        type: TokenType?
+        type: TokenType?,
     ): OcpiResponseBody<Token> =
         with(buildTransport()) {
             send(
                 HttpRequest(
                     method = HttpMethod.GET,
                     path = "/$countryCode/$partyId/$tokenUid",
-                    queryParams = listOfNotNull(type?.let { "type" to type.toString() }).toMap()
+                    queryParams = listOfNotNull(type?.let { "type" to type.toString() }).toMap(),
                 )
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
-                        correlationId = generateCorrelationId()
+                        correlationId = generateCorrelationId(),
                     )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             ).parseBody()
         }
 
@@ -56,7 +56,7 @@ class TokensEmspClient(
         countryCode: CiString,
         partyId: CiString,
         tokenUid: CiString,
-        type: TokenType?
+        type: TokenType?,
     ): OcpiResponseBody<Token> =
         with(buildTransport()) {
             send(
@@ -65,14 +65,14 @@ class TokensEmspClient(
                     path = "/$countryCode/$partyId/$tokenUid",
                     body = mapper.writeValueAsString(token),
                     queryParams = listOfNotNull(
-                        type?.let { "type" to type.toString() }
-                    ).toMap()
+                        type?.let { "type" to type.toString() },
+                    ).toMap(),
                 )
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
-                        correlationId = generateCorrelationId()
+                        correlationId = generateCorrelationId(),
                     )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             ).parseBody()
         }
 
@@ -81,7 +81,7 @@ class TokensEmspClient(
         countryCode: CiString,
         partyId: CiString,
         tokenUid: CiString,
-        type: TokenType?
+        type: TokenType?,
     ): OcpiResponseBody<Token?> =
         with(buildTransport()) {
             send(
@@ -90,14 +90,14 @@ class TokensEmspClient(
                     path = "/$countryCode/$partyId/$tokenUid",
                     body = mapper.writeValueAsString(token),
                     queryParams = listOfNotNull(
-                        type?.let { "type" to type.toString() }
-                    ).toMap()
+                        type?.let { "type" to type.toString() },
+                    ).toMap(),
                 )
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
-                        correlationId = generateCorrelationId()
+                        correlationId = generateCorrelationId(),
                     )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             ).parseBody()
         }
 }

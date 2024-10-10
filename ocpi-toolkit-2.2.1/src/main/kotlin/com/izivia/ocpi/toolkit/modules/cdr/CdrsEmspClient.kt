@@ -12,21 +12,21 @@ import java.time.Instant
 
 class CdrsEmspClient(
     private val transportClientBuilder: TransportClientBuilder,
-    private val serverVersionsEndpointUrl: String,
-    private val partnerRepository: PartnerRepository
+    private val partnerId: String,
+    private val partnerRepository: PartnerRepository,
 ) : CdrsCpoInterface {
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
             module = ModuleID.cdrs,
-            partnerUrl = serverVersionsEndpointUrl,
-            partnerRepository = partnerRepository
+            partnerId = partnerId,
+            partnerRepository = partnerRepository,
         )
 
     override suspend fun getCdrs(
         dateFrom: Instant?,
         dateTo: Instant?,
         offset: Int,
-        limit: Int?
+        limit: Int?,
     ): OcpiResponseBody<SearchResult<Cdr>> =
         with(buildTransport()) {
             send(
@@ -36,23 +36,23 @@ class CdrsEmspClient(
                         dateFrom?.let { "date_from" to it.toString() },
                         dateTo?.let { "date_to" to it.toString() },
                         "offset" to offset.toString(),
-                        limit?.let { "limit" to it.toString() }
-                    ).toMap()
+                        limit?.let { "limit" to it.toString() },
+                    ).toMap(),
                 ).withRequiredHeaders(
                     requestId = generateRequestId(),
-                    correlationId = generateCorrelationId()
+                    correlationId = generateCorrelationId(),
                 )
-                    .authenticate(partnerRepository = partnerRepository, partnerUrl = serverVersionsEndpointUrl)
+                    .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
                 .parsePaginatedBody(offset)
         }
 
     suspend fun getCdrsNextPage(
-        previousResponse: OcpiResponseBody<SearchResult<Cdr>>
+        previousResponse: OcpiResponseBody<SearchResult<Cdr>>,
     ): OcpiResponseBody<SearchResult<Cdr>>? = getNextPage(
         transportClientBuilder = transportClientBuilder,
-        serverVersionsEndpointUrl = serverVersionsEndpointUrl,
+        partnerId = partnerId,
         partnerRepository = partnerRepository,
-        previousResponse = previousResponse
+        previousResponse = previousResponse,
     )
 }
