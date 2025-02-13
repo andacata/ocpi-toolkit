@@ -14,7 +14,7 @@ plugins {
     id("io.github.gradle-nexus.publish-plugin") version Versions.nexus
 }
 
-val versionNumber = System.getenv("VERSION")?.substringAfter("R-") ?: "0.0.45.tweaked"
+val versionNumber = System.getenv("VERSION")?.substringAfter("R-") ?: "0.0.47.tweaked"
 
 println("building current version: $versionNumber")
 
