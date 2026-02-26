@@ -5,9 +5,11 @@ import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepositor
 import com.izivia.ocpi.toolkit.modules.tokens.domain.Token
 import com.izivia.ocpi.toolkit.modules.tokens.domain.TokenPartial
 import com.izivia.ocpi.toolkit.modules.tokens.domain.TokenType
+import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 
@@ -25,9 +27,9 @@ class TokensEmspClient(
 
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
-            module = ModuleID.tokens,
             partnerId = partnerId,
-            partnerRepository = partnerRepository,
+            module = ModuleID.tokens,
+            role = InterfaceRole.RECEIVER,
         )
 
     override suspend fun getToken(
@@ -35,7 +37,7 @@ class TokensEmspClient(
         partyId: CiString,
         tokenUid: CiString,
         type: TokenType?,
-    ): OcpiResponseBody<Token?> =
+    ): Token? =
         with(buildTransport()) {
             send(
                 HttpRequest(
@@ -48,22 +50,22 @@ class TokensEmspClient(
                         correlationId = generateCorrelationId(),
                     )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-            ).parseBody()
+            ).parseOptionalResult()
         }
 
     override suspend fun putToken(
-        token: Token,
         countryCode: CiString,
         partyId: CiString,
         tokenUid: CiString,
         type: TokenType?,
-    ): OcpiResponseBody<Token> =
+        token: Token,
+    ): TokenPartial =
         with(buildTransport()) {
             send(
                 HttpRequest(
                     method = HttpMethod.PUT,
                     path = "/$countryCode/$partyId/$tokenUid",
-                    body = mapper.writeValueAsString(token),
+                    body = mapper.serializeObject(token),
                     queryParams = listOfNotNull(
                         type?.let { "type" to type.toString() },
                     ).toMap(),
@@ -73,22 +75,22 @@ class TokensEmspClient(
                         correlationId = generateCorrelationId(),
                     )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-            ).parseBody()
+            ).parseResultOrNull() ?: TokenPartial()
         }
 
     override suspend fun patchToken(
-        token: TokenPartial,
         countryCode: CiString,
         partyId: CiString,
         tokenUid: CiString,
         type: TokenType?,
-    ): OcpiResponseBody<Token?> =
+        token: TokenPartial,
+    ): TokenPartial? =
         with(buildTransport()) {
             send(
                 HttpRequest(
                     method = HttpMethod.PATCH,
                     path = "/$countryCode/$partyId/$tokenUid",
-                    body = mapper.writeValueAsString(token),
+                    body = mapper.serializeObject(token),
                     queryParams = listOfNotNull(
                         type?.let { "type" to type.toString() },
                     ).toMap(),
@@ -98,6 +100,6 @@ class TokensEmspClient(
                         correlationId = generateCorrelationId(),
                     )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-            ).parseBody()
+            ).parseResultOrNull()
         }
 }

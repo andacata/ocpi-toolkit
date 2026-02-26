@@ -1,37 +1,40 @@
 package com.izivia.ocpi.toolkit.modules.locations.http.cpo
 
-import com.izivia.ocpi.toolkit.common.OcpiResponseBody
+import com.izivia.ocpi.toolkit.common.TestWithSerializerProviders
 import com.izivia.ocpi.toolkit.modules.buildHttpRequest
 import com.izivia.ocpi.toolkit.modules.isJsonEqualTo
-import com.izivia.ocpi.toolkit.modules.locations.LocationsCpoServer
+import com.izivia.ocpi.toolkit.modules.locations.LocationsCpoInterface
 import com.izivia.ocpi.toolkit.modules.locations.domain.*
 import com.izivia.ocpi.toolkit.modules.locations.repositories.LocationsCpoRepository
-import com.izivia.ocpi.toolkit.modules.locations.services.LocationsCpoService
 import com.izivia.ocpi.toolkit.modules.toSearchResult
-import com.izivia.ocpi.toolkit.modules.versions.repositories.InMemoryVersionsRepository
-import com.izivia.ocpi.toolkit.samples.common.Http4kTransportServer
-import com.izivia.ocpi.toolkit.transport.TransportClient
+import com.izivia.ocpi.toolkit.serialization.OcpiSerializer
+import com.izivia.ocpi.toolkit.serialization.deserializeOcpiResponse
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpResponse
 import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
+import strikt.assertions.isNotNull
 import java.time.Instant
 
-class LocationsCpoHttpGetLocationsTest {
-    @Test
-    fun `should list locations`() {
+class LocationsCpoHttpGetLocationsTest : TestWithSerializerProviders {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should list locations`(serializer: OcpiSerializer) {
+        mapper = serializer
         // given
         val slots = object {
             var dateFrom = slot<Instant>()
             var dateTo = slot<Instant>()
         }
-        val srv = mockk<LocationsCpoRepository> {
+        val srv = mockk<LocationsCpoInterface> {
             coEvery { getLocations(capture(slots.dateFrom), capture(slots.dateTo), any(), any()) } coAnswers {
                 listOf(
                     Location(
@@ -72,7 +75,6 @@ class LocationsCpoHttpGetLocationsTest {
                 ).toSearchResult()
             }
         }.buildServer()
-        OcpiResponseBody.now = { Instant.parse("2015-06-30T21:59:59Z") }
 
         // when
         val resp: HttpResponse = srv.send(
@@ -88,7 +90,7 @@ class LocationsCpoHttpGetLocationsTest {
             get { status }.isEqualTo(HttpStatus.OK)
             get { headers["X-Total-Count"] }.isEqualTo("1")
             get { headers["X-Limit"] }.isEqualTo("50")
-            get { body }.isJsonEqualTo(
+            get { body }.isNotNull().isJsonEqualTo(
                 """
 {
   "data": [
@@ -135,25 +137,29 @@ class LocationsCpoHttpGetLocationsTest {
   ],
   "status_code": 1000,
   "status_message": "Success",
-  "timestamp": "2015-06-30T21:59:59Z"
+  "timestamp": "$nowString"
 }
                 """.trimIndent(),
             )
         }
     }
-}
 
-private fun LocationsCpoRepository.buildServer(): TransportClient {
-    val transportServer = Http4kTransportServer("http://localhost:1234", 1234)
+    @Test
+    fun `should fail with OCPI Exception invalid parameter`() {
+        val srv = mockk<LocationsCpoRepository>().buildServer()
 
-    val repo = this
-    runBlocking {
-        LocationsCpoServer(
-            service = LocationsCpoService(repo),
-            versionsRepository = InMemoryVersionsRepository(),
-            basePathOverride = "/locations",
-        ).registerOn(transportServer)
+        // when
+        val resp: HttpResponse = srv.send(
+            buildHttpRequest(HttpMethod.GET, "/locations/?date_from=2019-01-28&date_to=2019-01-29T12:00:00Z"),
+        )
+
+        // then
+        expectThat(resp) {
+            get { status }.isEqualTo(HttpStatus.BAD_REQUEST) // unclear if this shouldn't be HTTP 200
+            get { body }.isNotNull().get { mapper.deserializeOcpiResponse<String>(this) }.and {
+                get { statusCode }.isEqualTo(2001)
+                get { statusMessage }.isEqualTo("Invalid value for param 'date_from': '2019-01-28'")
+            }
+        }
     }
-
-    return transportServer.initRouterAndBuildClient()
 }

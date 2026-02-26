@@ -68,4 +68,10 @@ enum class Capability {
      * Connectors have mechanical lock that can be requested by the eMSP to be unlocked.
      */
     UNLOCK_CAPABLE,
+
+    /**
+     * Placeholder entry serving as default value if we can not match with any other.
+     * Avoids failing deserialization on invalid entries.
+     */
+    OTHER,
 }

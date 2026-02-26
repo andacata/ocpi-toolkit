@@ -5,13 +5,13 @@ import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ChargingProfile
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ChargingProfileResponse
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.SetChargingProfile
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
+import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
-import com.izivia.ocpi.toolkit.transport.domain.HttpException
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
-import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
 
 class ChargingProfilesScspClient(
     private val transportClientBuilder: TransportClientBuilder,
@@ -22,16 +22,16 @@ class ChargingProfilesScspClient(
 
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
-            module = ModuleID.chargingprofiles,
             partnerId = partnerId,
-            partnerRepository = partnerRepository,
+            module = ModuleID.chargingprofiles,
+            role = InterfaceRole.RECEIVER,
         )
 
     suspend fun getActiveChargingProfile(
         sessionId: CiString,
         duration: Int,
         requestId: String,
-    ): OcpiResponseBody<ChargingProfileResponse> = with(buildTransport()) {
+    ): ChargingProfileResponse = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.GET,
@@ -48,22 +48,19 @@ class ChargingProfilesScspClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .also {
-                if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
-            }
-            .parseBody()
+            .parseResult()
     }
 
     suspend fun putChargingProfile(
         sessionId: CiString,
         chargingProfile: ChargingProfile,
         requestId: String,
-    ): OcpiResponseBody<ChargingProfileResponse> = with(buildTransport()) {
+    ): ChargingProfileResponse = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.PUT,
                 path = "/$sessionId",
-                body = mapper.writeValueAsString(
+                body = mapper.serializeObject(
                     SetChargingProfile(
                         chargingProfile = chargingProfile,
                         responseUrl = "$callbackBaseUrl/" +
@@ -77,18 +74,13 @@ class ChargingProfilesScspClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .also {
-                if (it.status != HttpStatus.OK && it.status != HttpStatus.CREATED) {
-                    throw HttpException(it.status, "status should be ${HttpStatus.OK} or ${HttpStatus.CREATED}")
-                }
-            }
-            .parseBody()
+            .parseResult()
     }
 
     suspend fun deleteChargingProfile(
         sessionId: CiString,
         requestId: String,
-    ): OcpiResponseBody<ChargingProfileResponse> = with(buildTransport()) {
+    ): ChargingProfileResponse = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.DELETE,
@@ -104,9 +96,6 @@ class ChargingProfilesScspClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .also {
-                if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
-            }
-            .parseBody()
+            .parseResult()
     }
 }

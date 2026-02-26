@@ -100,4 +100,10 @@ enum class Facility {
      * Wifi or other type of internet available.
      */
     WIFI,
+
+    /**
+     * Placeholder entry serving as default value if we can not match with any other.
+     * Avoids failing deserialization on invalid entries.
+     */
+    OTHER,
 }

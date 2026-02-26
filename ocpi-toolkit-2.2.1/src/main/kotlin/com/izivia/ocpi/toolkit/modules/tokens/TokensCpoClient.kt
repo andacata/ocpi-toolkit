@@ -2,13 +2,12 @@ package com.izivia.ocpi.toolkit.modules.tokens
 
 import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
-import com.izivia.ocpi.toolkit.modules.tokens.domain.AuthorizationInfo
-import com.izivia.ocpi.toolkit.modules.tokens.domain.LocationReferences
-import com.izivia.ocpi.toolkit.modules.tokens.domain.Token
-import com.izivia.ocpi.toolkit.modules.tokens.domain.TokenType
+import com.izivia.ocpi.toolkit.modules.tokens.domain.*
+import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 import java.time.Instant
@@ -23,12 +22,13 @@ class TokensCpoClient(
     private val transportClientBuilder: TransportClientBuilder,
     private val partnerId: String,
     private val partnerRepository: PartnerRepository,
+    private val ignoreInvalidListEntry: Boolean = false,
 ) : TokensEmspInterface {
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
-            module = ModuleID.tokens,
             partnerId = partnerId,
-            partnerRepository = partnerRepository,
+            module = ModuleID.tokens,
+            role = InterfaceRole.SENDER,
         )
 
     override suspend fun getTokens(
@@ -36,7 +36,7 @@ class TokensCpoClient(
         dateTo: Instant?,
         offset: Int,
         limit: Int?,
-    ): OcpiResponseBody<SearchResult<Token>> =
+    ): SearchResult<Token> =
         with(buildTransport()) {
             send(
                 HttpRequest(
@@ -53,37 +53,43 @@ class TokensCpoClient(
                         correlationId = generateCorrelationId(),
                     )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-            )
-                .parsePaginatedBody(offset)
+            ).let { res ->
+                if (ignoreInvalidListEntry) {
+                    res.parseSearchResultIgnoringInvalid<Token, TokenPartial>(offset)
+                } else {
+                    res.parseSearchResult<Token>(offset)
+                }
+            }
         }
 
     suspend fun getTokensNextPage(
-        previousResponse: OcpiResponseBody<SearchResult<Token>>,
-    ): OcpiResponseBody<SearchResult<Token>>? = getNextPage(
+        previousResponse: SearchResult<Token>,
+    ): SearchResult<Token>? = getNextPage<Token, TokenPartial>(
         transportClientBuilder = transportClientBuilder,
         partnerId = partnerId,
         partnerRepository = partnerRepository,
         previousResponse = previousResponse,
+        ignoreInvalidListEntry = ignoreInvalidListEntry,
     )
 
     override suspend fun postToken(
         tokenUid: CiString,
         type: TokenType?,
         locationReferences: LocationReferences?,
-    ): OcpiResponseBody<AuthorizationInfo> =
+    ): AuthorizationInfo =
         with(buildTransport()) {
             send(
                 HttpRequest(
                     method = HttpMethod.POST,
                     path = "/$tokenUid/authorize",
                     queryParams = listOfNotNull(type?.let { "type" to type.toString() }).toMap(),
-                    body = locationReferences.run(mapper::writeValueAsString),
+                    body = locationReferences.run(mapper::serializeObject),
                 )
                     .withRequiredHeaders(
                         requestId = generateRequestId(),
                         correlationId = generateCorrelationId(),
                     )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-            ).parseBody()
+            ).parseResult()
         }
 }

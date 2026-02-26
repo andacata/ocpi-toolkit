@@ -1,31 +1,32 @@
 package com.izivia.ocpi.toolkit.modules.locations.http.emsp
 
-import com.izivia.ocpi.toolkit.common.OcpiResponseBody
-import com.izivia.ocpi.toolkit.common.mapper
+import com.izivia.ocpi.toolkit.common.TestWithSerializerProviders
 import com.izivia.ocpi.toolkit.modules.buildHttpRequest
 import com.izivia.ocpi.toolkit.modules.isJsonEqualTo
-import com.izivia.ocpi.toolkit.modules.locations.LocationsEmspServer
 import com.izivia.ocpi.toolkit.modules.locations.domain.*
 import com.izivia.ocpi.toolkit.modules.locations.repositories.LocationsEmspRepository
-import com.izivia.ocpi.toolkit.modules.locations.services.LocationsEmspService
-import com.izivia.ocpi.toolkit.modules.versions.repositories.InMemoryVersionsRepository
-import com.izivia.ocpi.toolkit.samples.common.Http4kTransportServer
-import com.izivia.ocpi.toolkit.transport.TransportClient
+import com.izivia.ocpi.toolkit.serialization.OcpiSerializer
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpResponse
 import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
+import strikt.assertions.isNotNull
 import java.time.Instant
 
-class LocationsEmspHttpPatchConnectorTest {
-    @Test
-    fun `should patch connector`() {
+class LocationsEmspHttpPatchConnectorTest : TestWithSerializerProviders {
+
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should patch connector`(serializer: OcpiSerializer) {
+        mapper = serializer
         val slots = object {
             var countryCode = slot<String>()
             var partyId = slot<String>()
@@ -57,7 +58,6 @@ class LocationsEmspHttpPatchConnectorTest {
                 )
             }
         }.buildServer()
-        OcpiResponseBody.now = { Instant.parse("2015-06-30T21:59:59Z") }
 
         // when
         val connector = ConnectorPartial(
@@ -73,7 +73,7 @@ class LocationsEmspHttpPatchConnectorTest {
             lastUpdated = null,
         )
         val resp: HttpResponse = srv.send(
-            buildHttpRequest(HttpMethod.PATCH, "/locations/BE/BEC/LOC1/3256/1", mapper.writeValueAsString(connector)),
+            buildHttpRequest(HttpMethod.PATCH, "/locations/BE/BEC/LOC1/3256/1", mapper.serializeObject(connector)),
         )
 
         // then
@@ -86,9 +86,10 @@ class LocationsEmspHttpPatchConnectorTest {
         }
         expectThat(resp) {
             get { status }.isEqualTo(HttpStatus.OK)
-            get { body }.isJsonEqualTo(
+            get { body }.isNotNull().isJsonEqualTo(
                 """
                     {
+                      "data":{"id":"1","standard":"IEC_62196_T2","format":"CABLE","power_type":"AC_3_PHASE","max_voltage":220,"max_amperage":16,"tariff_ids":["11"],"last_updated":"2015-03-16T10:10:02Z"},
                       "status_code": 1000,
                       "status_message": "Success",
                       "timestamp": "2015-06-30T21:59:59Z"
@@ -97,19 +98,4 @@ class LocationsEmspHttpPatchConnectorTest {
             )
         }
     }
-}
-
-private fun LocationsEmspRepository.buildServer(): TransportClient {
-    val transportServer = Http4kTransportServer("http://localhost:1234", 1234)
-
-    val repo = this
-    runBlocking {
-        LocationsEmspServer(
-            service = LocationsEmspService(repo),
-            versionsRepository = InMemoryVersionsRepository(),
-            basePathOverride = "/locations",
-        ).registerOn(transportServer)
-    }
-
-    return transportServer.initRouterAndBuildClient()
 }

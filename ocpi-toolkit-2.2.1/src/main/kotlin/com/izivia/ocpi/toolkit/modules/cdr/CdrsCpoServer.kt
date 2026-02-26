@@ -1,7 +1,7 @@
 package com.izivia.ocpi.toolkit.modules.cdr
 
-import com.izivia.ocpi.toolkit.common.OcpiSelfRegisteringModuleServer
-import com.izivia.ocpi.toolkit.common.httpResponse
+import com.izivia.ocpi.toolkit.common.*
+import com.izivia.ocpi.toolkit.modules.cdr.domain.Cdr
 import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
@@ -12,6 +12,7 @@ import java.time.Instant
 
 class CdrsCpoServer(
     private val service: CdrsCpoInterface,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
     versionsRepository: MutableVersionsRepository? = null,
     basePathOverride: String? = null,
 ) : OcpiSelfRegisteringModuleServer(
@@ -27,16 +28,13 @@ class CdrsCpoServer(
             path = basePathSegments,
             queryParams = listOf("date_from", "date_to", "offset", "limit"),
         ) { req ->
-            req.httpResponse {
-                val dateFrom = req.queryParams["date_from"]
-                val dateTo = req.queryParams["date_to"]
-
+            req.respondSearchResult<Cdr>(timeProvider.now()) {
                 service
                     .getCdrs(
-                        dateFrom = dateFrom?.let { Instant.parse(it) },
-                        dateTo = dateTo?.let { Instant.parse(it) },
-                        offset = req.queryParams["offset"]?.toInt() ?: 0,
-                        limit = req.queryParams["limit"]?.toInt(),
+                        dateFrom = req.optionalQueryParamAsInstant("date_from"),
+                        dateTo = req.optionalQueryParamAsInstant("date_to"),
+                        offset = req.optionalQueryParamAsInt("offset") ?: 0,
+                        limit = req.optionalQueryParamAsInt("limit"),
                     )
             }
         }

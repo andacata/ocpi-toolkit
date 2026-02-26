@@ -1,19 +1,21 @@
 package com.izivia.ocpi.toolkit.modules.locations
 
-import com.izivia.ocpi.toolkit.common.OcpiSelfRegisteringModuleServer
-import com.izivia.ocpi.toolkit.common.httpResponse
-import com.izivia.ocpi.toolkit.common.mapper
+import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.locations.domain.*
 import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.MutableVersionsRepository
+import com.izivia.ocpi.toolkit.serialization.deserializeObject
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.TransportServer
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.VariablePathSegment
+import java.time.Instant
 
 class LocationsEmspServer(
     private val service: LocationsEmspInterface,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
     versionsRepository: MutableVersionsRepository? = null,
     basePathOverride: String? = null,
 ) : OcpiSelfRegisteringModuleServer(
@@ -33,12 +35,12 @@ class LocationsEmspServer(
                 VariablePathSegment("locationId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .getLocation(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
                     )
             }
         }
@@ -52,13 +54,13 @@ class LocationsEmspServer(
                 VariablePathSegment("evseUid"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .getEvse(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        evseUid = req.pathParams["evseUid"]!!,
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        evseUid = req.pathParam("evseUid"),
                     )
             }
         }
@@ -73,14 +75,14 @@ class LocationsEmspServer(
                 VariablePathSegment("connectorId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .getConnector(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        evseUid = req.pathParams["evseUid"]!!,
-                        connectorId = req.pathParams["connectorId"]!!,
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        evseUid = req.pathParam("evseUid"),
+                        connectorId = req.pathParam("connectorId"),
                     )
             }
         }
@@ -93,13 +95,13 @@ class LocationsEmspServer(
                 VariablePathSegment("locationId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .putLocation(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        location = mapper.readValue(req.body, Location::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        location = mapper.deserializeObject<Location>(req.body),
                     )
             }
         }
@@ -113,14 +115,14 @@ class LocationsEmspServer(
                 VariablePathSegment("evseUid"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .putEvse(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        evseUid = req.pathParams["evseUid"]!!,
-                        evse = mapper.readValue(req.body!!, Evse::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        evseUid = req.pathParam("evseUid"),
+                        evse = mapper.deserializeObject<Evse>(req.body!!),
                     )
             }
         }
@@ -135,15 +137,15 @@ class LocationsEmspServer(
                 VariablePathSegment("connectorId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .putConnector(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        evseUid = req.pathParams["evseUid"]!!,
-                        connectorId = req.pathParams["connectorId"]!!,
-                        connector = mapper.readValue(req.body!!, Connector::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        evseUid = req.pathParam("evseUid"),
+                        connectorId = req.pathParam("connectorId"),
+                        connector = mapper.deserializeObject<Connector>(req.body!!),
                     )
             }
         }
@@ -156,13 +158,13 @@ class LocationsEmspServer(
                 VariablePathSegment("locationId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .patchLocation(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        location = mapper.readValue(req.body!!, LocationPartial::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        location = mapper.deserializeObject<LocationPartial>(req.body!!),
                     )
             }
         }
@@ -176,14 +178,14 @@ class LocationsEmspServer(
                 VariablePathSegment("evseUid"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .patchEvse(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        evseUid = req.pathParams["evseUid"]!!,
-                        evse = mapper.readValue(req.body!!, EvsePartial::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        evseUid = req.pathParam("evseUid"),
+                        evse = mapper.deserializeObject<EvsePartial>(req.body!!),
                     )
             }
         }
@@ -198,15 +200,15 @@ class LocationsEmspServer(
                 VariablePathSegment("connectorId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .patchConnector(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        locationId = req.pathParams["locationId"]!!,
-                        evseUid = req.pathParams["evseUid"]!!,
-                        connectorId = req.pathParams["connectorId"]!!,
-                        connector = mapper.readValue(req.body!!, ConnectorPartial::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        locationId = req.pathParam("locationId"),
+                        evseUid = req.pathParam("evseUid"),
+                        connectorId = req.pathParam("connectorId"),
+                        connector = mapper.deserializeObject<ConnectorPartial>(req.body!!),
                     )
             }
         }

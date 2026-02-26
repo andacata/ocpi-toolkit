@@ -7,11 +7,15 @@ import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.MutableVersionsRepository
+import com.izivia.ocpi.toolkit.serialization.deserializeObject
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.TransportServer
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
+import java.time.Instant
 
 class CredentialsServer(
     private val service: CredentialsServerService,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
     versionsRepository: MutableVersionsRepository? = null,
     basePathOverride: String? = null,
 ) : OcpiSelfRegisteringModuleServer(
@@ -28,7 +32,7 @@ class CredentialsServer(
             method = HttpMethod.GET,
             path = basePathSegments,
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service.get(
                     token = req.parseAuthorizationHeader(),
                 )
@@ -39,10 +43,10 @@ class CredentialsServer(
             method = HttpMethod.POST,
             path = basePathSegments,
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service.post(
                     token = req.parseAuthorizationHeader(),
-                    credentials = mapper.readValue(req.body!!, Credentials::class.java),
+                    credentials = mapper.deserializeObject<Credentials>(req.body!!),
                     debugHeaders = req.getDebugHeaders(),
                 )
             }
@@ -52,10 +56,10 @@ class CredentialsServer(
             method = HttpMethod.PUT,
             path = basePathSegments,
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service.put(
                     token = req.parseAuthorizationHeader(),
-                    credentials = mapper.readValue(req.body!!, Credentials::class.java),
+                    credentials = mapper.deserializeObject<Credentials>(req.body!!),
                     debugHeaders = req.getDebugHeaders(),
                 )
             }
@@ -65,7 +69,7 @@ class CredentialsServer(
             method = HttpMethod.DELETE,
             path = basePathSegments,
         ) { req ->
-            req.httpResponse {
+            req.respondNothing(timeProvider.now()) {
                 service.delete(
                     token = req.parseAuthorizationHeader(),
                 )

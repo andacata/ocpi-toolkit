@@ -1,15 +1,20 @@
 package com.izivia.ocpi.toolkit.modules.versions
 
 import com.izivia.ocpi.toolkit.common.OcpiModuleServer
-import com.izivia.ocpi.toolkit.common.httpResponse
+import com.izivia.ocpi.toolkit.common.TimeProvider
+import com.izivia.ocpi.toolkit.common.pathParam
+import com.izivia.ocpi.toolkit.common.respondList
+import com.izivia.ocpi.toolkit.common.respondObject
 import com.izivia.ocpi.toolkit.modules.versions.services.VersionsService
 import com.izivia.ocpi.toolkit.transport.TransportServer
 import com.izivia.ocpi.toolkit.transport.domain.FixedPathSegment
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.VariablePathSegment
+import java.time.Instant
 
 class VersionsServer(
     private val service: VersionsService,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
 ) : OcpiModuleServer("") {
 
     override suspend fun registerOn(transportServer: TransportServer) {
@@ -17,7 +22,7 @@ class VersionsServer(
             method = HttpMethod.GET,
             path = listOf(FixedPathSegment(service.versionsBasePath)),
         ) { req ->
-            req.httpResponse {
+            req.respondList(timeProvider.now()) {
                 service.getVersions()
             }
         }
@@ -29,9 +34,9 @@ class VersionsServer(
                 VariablePathSegment("versionNumber"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service.getVersionDetails(
-                    versionNumber = req.pathParams["versionNumber"]!!,
+                    versionNumber = req.pathParam("versionNumber"),
                 )
             }
         }

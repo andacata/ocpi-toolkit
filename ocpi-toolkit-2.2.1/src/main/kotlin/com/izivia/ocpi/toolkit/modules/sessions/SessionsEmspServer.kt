@@ -1,20 +1,22 @@
 package com.izivia.ocpi.toolkit.modules.sessions
 
-import com.izivia.ocpi.toolkit.common.OcpiSelfRegisteringModuleServer
-import com.izivia.ocpi.toolkit.common.httpResponse
-import com.izivia.ocpi.toolkit.common.mapper
+import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.sessions.domain.Session
 import com.izivia.ocpi.toolkit.modules.sessions.domain.SessionPartial
 import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.MutableVersionsRepository
+import com.izivia.ocpi.toolkit.serialization.deserializeObject
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.TransportServer
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.VariablePathSegment
+import java.time.Instant
 
 class SessionsEmspServer(
     private val service: SessionsEmspInterface,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
     versionsRepository: MutableVersionsRepository? = null,
     basePathOverride: String? = null,
 ) : OcpiSelfRegisteringModuleServer(
@@ -34,12 +36,12 @@ class SessionsEmspServer(
                 VariablePathSegment("sessionId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .getSession(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        sessionId = req.pathParams["sessionId"]!!,
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        sessionId = req.pathParam("sessionId"),
                     )
             }
         }
@@ -52,13 +54,13 @@ class SessionsEmspServer(
                 VariablePathSegment("sessionId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .putSession(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        sessionId = req.pathParams["sessionId"]!!,
-                        session = mapper.readValue(req.body, Session::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        sessionId = req.pathParam("sessionId"),
+                        session = mapper.deserializeObject<Session>(req.body),
                     )
             }
         }
@@ -71,13 +73,13 @@ class SessionsEmspServer(
                 VariablePathSegment("sessionId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .patchSession(
-                        countryCode = req.pathParams["countryCode"]!!,
-                        partyId = req.pathParams["partyId"]!!,
-                        sessionId = req.pathParams["sessionId"]!!,
-                        session = mapper.readValue(req.body, SessionPartial::class.java),
+                        countryCode = req.pathParam("countryCode"),
+                        partyId = req.pathParam("partyId"),
+                        sessionId = req.pathParam("sessionId"),
+                        session = mapper.deserializeObject<SessionPartial>(req.body),
                     )
             }
         }

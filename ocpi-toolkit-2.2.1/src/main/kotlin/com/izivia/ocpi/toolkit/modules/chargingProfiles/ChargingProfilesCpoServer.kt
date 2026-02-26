@@ -1,19 +1,21 @@
 package com.izivia.ocpi.toolkit.modules.chargingProfiles
 
-import com.izivia.ocpi.toolkit.common.OcpiSelfRegisteringModuleServer
-import com.izivia.ocpi.toolkit.common.httpResponse
-import com.izivia.ocpi.toolkit.common.mapper
+import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.SetChargingProfile
 import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.MutableVersionsRepository
+import com.izivia.ocpi.toolkit.serialization.deserializeObject
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.TransportServer
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.VariablePathSegment
+import java.time.Instant
 
 class ChargingProfilesCpoServer(
     private val service: ChargingProfilesCpoInterface,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
     versionsRepository: MutableVersionsRepository? = null,
     basePathOverride: String? = null,
 ) : OcpiSelfRegisteringModuleServer(
@@ -32,12 +34,12 @@ class ChargingProfilesCpoServer(
             ),
             queryParams = listOf("duration", "response_url"),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .getActiveChargingProfile(
-                        sessionId = req.pathParams["sessionId"]!!,
-                        duration = req.queryParams["duration"]!!.toInt(),
-                        responseUrl = req.queryParams["response_url"]!!,
+                        sessionId = req.pathParam("sessionId"),
+                        duration = req.queryParamAsInt("duration"),
+                        responseUrl = req.queryParam("response_url"),
                     )
             }
         }
@@ -48,11 +50,11 @@ class ChargingProfilesCpoServer(
                 VariablePathSegment("sessionId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .putChargingProfile(
-                        sessionId = req.pathParams["sessionId"]!!,
-                        setChargingProfile = mapper.readValue(req.body, SetChargingProfile::class.java),
+                        sessionId = req.pathParam("sessionId"),
+                        setChargingProfile = mapper.deserializeObject<SetChargingProfile>(req.body),
                     )
             }
         }
@@ -64,11 +66,11 @@ class ChargingProfilesCpoServer(
             ),
             queryParams = listOf("response_url"),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service
                     .deleteChargingProfile(
-                        sessionId = req.pathParams["sessionId"]!!,
-                        responseUrl = req.queryParams["response_url"]!!,
+                        sessionId = req.pathParam("sessionId"),
+                        responseUrl = req.queryParam("response_url"),
                     )
             }
         }

@@ -11,7 +11,6 @@ import com.izivia.ocpi.toolkit.modules.versions.domain.Endpoint
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.parseVersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.VersionsRepository
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
 
 /**
  * Automates authentification process
@@ -44,7 +43,6 @@ open class CredentialsClientService(
         ?.let { clientToken ->
             buildCredentialClient()
                 .get(token = clientToken)
-                .let { it.data ?: throw OcpiResponseException(it.statusCode, it.statusMessage ?: "unknown") }
         }
         ?: throw OcpiClientGenericException(
             "Could not find CREDENTIALS_TOKEN_C associated with partner $partnerId",
@@ -102,9 +100,7 @@ open class CredentialsClientService(
                 roles = clientCredentialsRoleRepository.getCredentialsRoles(partnerId),
             ),
             debugHeaders = emptyMap(),
-        ).let {
-            it.data ?: throw OcpiResponseException(it.statusCode, it.statusMessage ?: "unknown")
-        }
+        )
 
         // Save credentials roles of partner
         clientPartnerRepository.saveCredentialsRoles(
@@ -151,9 +147,7 @@ open class CredentialsClientService(
                 roles = clientCredentialsRoleRepository.getCredentialsRoles(partnerId),
             ),
             debugHeaders = emptyMap(),
-        ).let {
-            it.data ?: throw OcpiResponseException(it.statusCode, it.statusMessage ?: "unknown")
-        }
+        )
 
         // Save credentials roles of partner
         clientPartnerRepository.saveCredentialsRoles(
@@ -181,11 +175,6 @@ open class CredentialsClientService(
                     // to the partner
                     clientPartnerRepository.invalidateCredentialsServerToken(partnerId = partnerId)
                 }
-                .also {
-                    if (it.statusCode != OcpiStatus.SUCCESS.code) {
-                        throw OcpiResponseException(it.statusCode, it.statusMessage ?: "unknown")
-                    }
-                }
         }
         ?: throw OcpiClientGenericException(
             "Could not find client token associated with partner $partnerId",
@@ -198,9 +187,6 @@ open class CredentialsClientService(
             partnerRepository = clientPartnerRepository,
         )
             .getVersions()
-            .let {
-                it.data ?: throw OcpiResponseException(it.statusCode, it.statusMessage ?: "unknown")
-            }
         val availableClientVersionNumbers = clientVersionsRepository.getVersions()
 
         // Get available versions and pick latest mutual
@@ -224,9 +210,6 @@ open class CredentialsClientService(
             partnerRepository = clientPartnerRepository,
         )
             .getVersionDetails()
-            .let {
-                it.data ?: throw OcpiResponseException(it.statusCode, it.statusMessage ?: "unknown")
-            }
 
         checkRequiredEndpoints(requiredEndpoints, versionDetails.endpoints)
 

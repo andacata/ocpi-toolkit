@@ -6,13 +6,13 @@ import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ActiveChargingPro
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ChargingProfileResult
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ClearProfileResult
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
+import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
-import com.izivia.ocpi.toolkit.transport.domain.HttpException
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
-import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
 
 /**
  * Send calls to the SCSP
@@ -34,20 +34,20 @@ class ChargingProfilesCpoClient(
 
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
-            module = ModuleID.chargingprofiles,
             partnerId = partnerId,
-            partnerRepository = partnerRepository,
+            module = ModuleID.chargingprofiles,
+            role = InterfaceRole.SENDER,
         )
 
     suspend fun postCallbackActiveChargingProfile(
         responseUrl: String,
         result: ActiveChargingProfileResult,
-    ): OcpiResponseBody<Any> = with(buildCallbackTransport()) {
+    ) = with(buildCallbackTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.POST,
                 path = responseUrl,
-                body = mapper.writeValueAsString(result),
+                body = mapper.serializeObject(result),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
@@ -55,21 +55,18 @@ class ChargingProfilesCpoClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .also {
-                if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
-            }
-            .parseBody()
+            .parseResultOrNull<String>()
     }
 
     suspend fun postCallbackChargingProfile(
         responseUrl: String,
         result: ChargingProfileResult,
-    ): OcpiResponseBody<Any> = with(buildCallbackTransport()) {
+    ) = with(buildCallbackTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.POST,
                 path = responseUrl,
-                body = mapper.writeValueAsString(result),
+                body = mapper.serializeObject(result),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
@@ -77,21 +74,18 @@ class ChargingProfilesCpoClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .also {
-                if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
-            }
-            .parseBody()
+            .parseResultOrNull<String>()
     }
 
     suspend fun postCallbackClearProfile(
         responseUrl: String,
         result: ClearProfileResult,
-    ): OcpiResponseBody<Any> = with(buildCallbackTransport()) {
+    ) = with(buildCallbackTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.POST,
                 path = responseUrl,
-                body = mapper.writeValueAsString(result),
+                body = mapper.serializeObject(result),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
@@ -99,21 +93,18 @@ class ChargingProfilesCpoClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .also {
-                if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
-            }
-            .parseBody()
+            .parseResultOrNull<String>()
     }
 
     suspend fun putActiveChargingProfile(
         sessionId: CiString,
         activeChargingProfile: ActiveChargingProfile,
-    ): OcpiResponseBody<Any> = with(buildTransport()) {
+    ) = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.PUT,
                 path = "/$sessionId",
-                body = mapper.writeValueAsString(activeChargingProfile),
+                body = mapper.serializeObject(activeChargingProfile),
             )
                 .withRequiredHeaders(
                     requestId = generateRequestId(),
@@ -121,9 +112,6 @@ class ChargingProfilesCpoClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .also {
-                if (it.status != HttpStatus.OK) throw HttpException(it.status, "status should be ${HttpStatus.OK}")
-            }
-            .parseBody()
+            .parseResultOrNull<String>()
     }
 }

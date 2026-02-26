@@ -3,8 +3,8 @@ package com.izivia.ocpi.toolkit.modules.versions
 import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
 import com.izivia.ocpi.toolkit.modules.versions.domain.Version
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
-import com.izivia.ocpi.toolkit.transport.domain.*
+import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
+import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 
 /**
  * Used to get the versions of a partner
@@ -18,7 +18,7 @@ class VersionsClient(
     private val partnerRepository: PartnerRepository,
 ) : VersionsInterface {
 
-    override suspend fun getVersions(): OcpiResponseBody<List<Version>> =
+    override suspend fun getVersions(): List<Version> =
         with(
             transportClientBuilder
                 .build(
@@ -39,15 +39,6 @@ class VersionsClient(
                         allowTokenA = true,
                     ),
             )
-                .also {
-                    if (it.status != HttpStatus.OK) throw HttpException(it.status, parseHttpStatus(it.status.code).name)
-                }
-                .runCatching {
-                    this.parseBody<OcpiResponseBody<List<Version>>>()
-                }
-                .onFailure {
-                    throw OcpiToolkitResponseParsingException(partnerId, it)
-                }
-                .getOrThrow()
+                .parseResultList<Version>()
         }
 }

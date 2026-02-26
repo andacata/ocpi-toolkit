@@ -12,20 +12,18 @@ dependencies {
     api("org.apache.logging.log4j:log4j-api:${Versions.log4j}")
     api("org.apache.logging.log4j:log4j-core:${Versions.log4j}")
 
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:${Versions.jackson}")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${Versions.jackson}")
     implementation("org.valiktor:valiktor-core:${Versions.valiktor}")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${Versions.coroutines}")
 
     testImplementation(http4k("core"))
-    testImplementation(http4k("contract"))
-    testImplementation(http4k("client-jetty"))
+    testImplementation(http4k("api-openapi"))
+    testImplementation(http4k("client-okhttp"))
     testImplementation(http4k("server-netty"))
 
     testImplementation("org.junit.jupiter:junit-jupiter:${Versions.junit}")
     testImplementation("io.strikt:strikt-core:${Versions.strikt}")
-    testImplementation("com.github.fslev:json-compare:6.10")
+    testImplementation("io.github.deblockt:json-diff:${Versions.jsonDiff}")
     testImplementation("io.mockk:mockk:${Versions.mockk}")
 
     testImplementation("org.testcontainers:testcontainers:${Versions.testcontainers}")
@@ -33,7 +31,10 @@ dependencies {
     testImplementation("org.testcontainers:mongodb:${Versions.testcontainers}")
     testImplementation("org.litote.kmongo:kmongo:${Versions.kmongo}")
 
+    testRuntimeOnly(project(":integrations:ocpi-toolkit-2.2.1-jackson"))
+    testRuntimeOnly(project(":integrations:ocpi-toolkit-2.2.1-kotlinx-serialization"))
     testRuntimeOnly("ch.qos.logback:logback-classic:${Versions.logback}")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.test {
@@ -43,9 +44,10 @@ tasks.test {
     }
 }
 
-sourceSets.main {
-    // new way to use buildDir: https://docs.gradle.org/current/userguide/upgrading_version_8.html#deprecations_3
-    kotlin.srcDirs("${layout.buildDirectory.get().asFile.absolutePath}/generated/ksp")
+kotlin {
+    sourceSets.main {
+        kotlin.srcDir("build/generated/ksp/main/kotlin")
+    }
 }
 
 java {

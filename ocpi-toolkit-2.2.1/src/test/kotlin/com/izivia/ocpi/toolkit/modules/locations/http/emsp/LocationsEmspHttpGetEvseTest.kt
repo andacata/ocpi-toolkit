@@ -1,30 +1,30 @@
 package com.izivia.ocpi.toolkit.modules.locations.http.emsp
 
-import com.izivia.ocpi.toolkit.common.OcpiResponseBody
+import com.izivia.ocpi.toolkit.common.TestWithSerializerProviders
 import com.izivia.ocpi.toolkit.modules.buildHttpRequest
 import com.izivia.ocpi.toolkit.modules.isJsonEqualTo
-import com.izivia.ocpi.toolkit.modules.locations.LocationsEmspServer
 import com.izivia.ocpi.toolkit.modules.locations.domain.*
 import com.izivia.ocpi.toolkit.modules.locations.repositories.LocationsEmspRepository
-import com.izivia.ocpi.toolkit.modules.locations.services.LocationsEmspService
-import com.izivia.ocpi.toolkit.modules.versions.repositories.InMemoryVersionsRepository
-import com.izivia.ocpi.toolkit.samples.common.Http4kTransportServer
-import com.izivia.ocpi.toolkit.transport.TransportClient
+import com.izivia.ocpi.toolkit.serialization.OcpiSerializer
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpResponse
 import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
+import strikt.assertions.isNotNull
 import java.time.Instant
 
-class LocationsEmspHttpGetEvseTest {
-    @Test
-    fun `should be evse`() {
+class LocationsEmspHttpGetEvseTest : TestWithSerializerProviders {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should be evse`(serializer: OcpiSerializer) {
+        mapper = serializer
         val slots = object {
             var countryCode = slot<String>()
             var partyId = slot<String>()
@@ -73,7 +73,6 @@ class LocationsEmspHttpGetEvseTest {
                 )
             }
         }.buildServer()
-        OcpiResponseBody.now = { Instant.parse("2015-06-30T21:59:59Z") }
 
         // when
         val resp: HttpResponse = srv.send(
@@ -89,7 +88,7 @@ class LocationsEmspHttpGetEvseTest {
         }
         expectThat(resp) {
             get { status }.isEqualTo(HttpStatus.OK)
-            get { body }.isJsonEqualTo(
+            get { body }.isNotNull().isJsonEqualTo(
                 """
                 {
                   "data": {
@@ -133,19 +132,4 @@ class LocationsEmspHttpGetEvseTest {
             )
         }
     }
-}
-
-private fun LocationsEmspRepository.buildServer(): TransportClient {
-    val transportServer = Http4kTransportServer("http://localhost:1234", 1234)
-
-    val repo = this
-    runBlocking {
-        LocationsEmspServer(
-            service = LocationsEmspService(repo),
-            versionsRepository = InMemoryVersionsRepository(),
-            basePathOverride = "/locations",
-        ).registerOn(transportServer)
-    }
-
-    return transportServer.initRouterAndBuildClient()
 }

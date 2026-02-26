@@ -3,18 +3,16 @@ package com.izivia.ocpi.toolkit.common.validation
 import com.izivia.ocpi.toolkit.common.CiString
 import com.izivia.ocpi.toolkit.modules.types.DisplayTextPartial
 import com.izivia.ocpi.toolkit.modules.types.PricePartial
-import org.valiktor.Constraint
-import org.valiktor.ConstraintViolationException
-import org.valiktor.Validator
+import org.valiktor.*
 import org.valiktor.functions.isGreaterThanOrEqualTo
-import org.valiktor.validate
 import java.math.BigDecimal
 import java.net.URL
 import java.time.Instant
 import java.util.*
 
-fun ConstraintViolationException.toReadableString(): String =
-    constraintViolations.joinToString(", ") {
+fun ConstraintViolationException.toReadableString(): String = constraintViolations.toReadableString()
+fun Set<ConstraintViolation>.toReadableString(): String =
+    joinToString(", ") {
         "${it.constraint} violation on ${it.property}=${it.value}"
     }
 
@@ -199,9 +197,11 @@ fun <E> Validator<E>.Property<BigDecimal?>.isBigDecimalPositive() = this.isGreat
 
 fun <E> Validator<E>.Property<Int?>.isIntPositive() = this.isGreaterThanOrEqualTo(0)
 
-fun PricePartial.validate(): PricePartial = validate(this) {
-    //validate(PricePartial::exclVat).isGreaterThanOrEqualTo(BigDecimal.ZERO)
-    //validate(PricePartial::inclVat).isGreaterThanOrEqualTo(BigDecimal.ZERO)
+fun PricePartial.validate(allowNegative: Boolean = false): PricePartial = validate(this) {
+    if (!allowNegative) {
+        //validate(PricePartial::exclVat).isGreaterThanOrEqualTo(BigDecimal.ZERO)
+        //validate(PricePartial::inclVat).isGreaterThanOrEqualTo(BigDecimal.ZERO)
+    }
 }
 
 fun DisplayTextPartial.validate(): DisplayTextPartial = validate(this) {

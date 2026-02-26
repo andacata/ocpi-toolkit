@@ -5,9 +5,12 @@ import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepositor
 import com.izivia.ocpi.toolkit.modules.sessions.domain.ChargingPreferences
 import com.izivia.ocpi.toolkit.modules.sessions.domain.ChargingPreferencesResponseType
 import com.izivia.ocpi.toolkit.modules.sessions.domain.Session
+import com.izivia.ocpi.toolkit.modules.sessions.domain.SessionPartial
+import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 import java.time.Instant
@@ -22,12 +25,13 @@ class SessionsEmspClient(
     private val transportClientBuilder: TransportClientBuilder,
     private val partnerId: String,
     private val partnerRepository: PartnerRepository,
+    private val ignoreInvalidListEntry: Boolean = false,
 ) : SessionsCpoInterface {
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
-            module = ModuleID.sessions,
             partnerId = partnerId,
-            partnerRepository = partnerRepository,
+            module = ModuleID.sessions,
+            role = InterfaceRole.SENDER,
         )
 
     override suspend fun getSessions(
@@ -35,7 +39,7 @@ class SessionsEmspClient(
         dateTo: Instant?,
         offset: Int,
         limit: Int?,
-    ): OcpiResponseBody<SearchResult<Session>> =
+    ): SearchResult<Session> =
         with(buildTransport()) {
             send(
                 HttpRequest(
@@ -51,35 +55,41 @@ class SessionsEmspClient(
                     correlationId = generateCorrelationId(),
                 )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-            )
-                .parsePaginatedBody(offset)
+            ).let { res ->
+                if (ignoreInvalidListEntry) {
+                    res.parseSearchResultIgnoringInvalid<Session, SessionPartial>(offset)
+                } else {
+                    res.parseSearchResult<Session>(offset)
+                }
+            }
         }
 
     suspend fun getSessionsNextPage(
-        previousResponse: OcpiResponseBody<SearchResult<Session>>,
-    ): OcpiResponseBody<SearchResult<Session>>? = getNextPage(
+        previousResponse: SearchResult<Session>,
+    ): SearchResult<Session>? = getNextPage<Session, SessionPartial>(
         transportClientBuilder = transportClientBuilder,
         partnerId = partnerId,
         partnerRepository = partnerRepository,
         previousResponse = previousResponse,
+        ignoreInvalidListEntry = ignoreInvalidListEntry,
     )
 
     override suspend fun putChargingPreferences(
         sessionId: CiString,
         chargingPreferences: ChargingPreferences,
-    ): OcpiResponseBody<ChargingPreferencesResponseType> =
+    ): ChargingPreferencesResponseType =
         with(buildTransport()) {
             send(
                 HttpRequest(
                     method = HttpMethod.PUT,
                     path = "/$sessionId/charging_preferences",
-                    body = mapper.writeValueAsString(chargingPreferences),
+                    body = mapper.serializeObject(chargingPreferences),
                 ).withRequiredHeaders(
                     requestId = generateRequestId(),
                     correlationId = generateCorrelationId(),
                 )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
-                .parseBody()
+                .parseResult()
         }
 }

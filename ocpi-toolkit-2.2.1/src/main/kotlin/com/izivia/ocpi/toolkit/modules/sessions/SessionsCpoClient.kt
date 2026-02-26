@@ -4,9 +4,11 @@ import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
 import com.izivia.ocpi.toolkit.modules.sessions.domain.Session
 import com.izivia.ocpi.toolkit.modules.sessions.domain.SessionPartial
+import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 
@@ -23,16 +25,16 @@ class SessionsCpoClient(
 ) : SessionsEmspInterface {
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
-            module = ModuleID.sessions,
             partnerId = partnerId,
-            partnerRepository = partnerRepository,
+            module = ModuleID.sessions,
+            role = InterfaceRole.RECEIVER,
         )
 
     override suspend fun getSession(
         countryCode: CiString,
         partyId: CiString,
         sessionId: CiString,
-    ): OcpiResponseBody<Session?> =
+    ): Session? =
         with(buildTransport()) {
             send(
                 HttpRequest(
@@ -44,7 +46,7 @@ class SessionsCpoClient(
                 )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
-                .parseBody()
+                .parseOptionalResult()
         }
 
     override suspend fun putSession(
@@ -52,20 +54,20 @@ class SessionsCpoClient(
         partyId: CiString,
         sessionId: CiString,
         session: Session,
-    ): OcpiResponseBody<Session?> =
+    ): SessionPartial =
         with(buildTransport()) {
             send(
                 HttpRequest(
                     method = HttpMethod.PUT,
                     path = "/$countryCode/$partyId/$sessionId",
-                    body = mapper.writeValueAsString(session),
+                    body = mapper.serializeObject(session),
                 ).withRequiredHeaders(
                     requestId = generateRequestId(),
                     correlationId = generateCorrelationId(),
                 )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
-                .parseBody()
+                .parseResultOrNull() ?: SessionPartial()
         }
 
     override suspend fun patchSession(
@@ -73,19 +75,19 @@ class SessionsCpoClient(
         partyId: CiString,
         sessionId: CiString,
         session: SessionPartial,
-    ): OcpiResponseBody<Session?> =
+    ): SessionPartial? =
         with(buildTransport()) {
             send(
                 HttpRequest(
                     method = HttpMethod.PATCH,
                     path = "/$countryCode/$partyId/$sessionId",
-                    body = mapper.writeValueAsString(session),
+                    body = mapper.serializeObject(session),
                 ).withRequiredHeaders(
                     requestId = generateRequestId(),
                     correlationId = generateCorrelationId(),
                 )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
-                .parseBody()
+                .parseResultOrNull()
         }
 }

@@ -5,9 +5,10 @@ import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepositor
 import com.izivia.ocpi.toolkit.modules.locations.domain.Connector
 import com.izivia.ocpi.toolkit.modules.locations.domain.Evse
 import com.izivia.ocpi.toolkit.modules.locations.domain.Location
+import com.izivia.ocpi.toolkit.modules.locations.domain.LocationPartial
+import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 import java.time.Instant
@@ -22,13 +23,14 @@ class LocationsEmspClient(
     private val transportClientBuilder: TransportClientBuilder,
     private val partnerId: String,
     private val partnerRepository: PartnerRepository,
+    private val ignoreInvalidListEntry: Boolean = false,
 ) : LocationsCpoInterface {
 
     private suspend fun buildTransport(): TransportClient = transportClientBuilder
         .buildFor(
-            module = ModuleID.locations,
             partnerId = partnerId,
-            partnerRepository = partnerRepository,
+            module = ModuleID.locations,
+            role = InterfaceRole.SENDER,
         )
 
     override suspend fun getLocations(
@@ -36,7 +38,7 @@ class LocationsEmspClient(
         dateTo: Instant?,
         offset: Int,
         limit: Int?,
-    ): OcpiResponseBody<SearchResult<Location>> = with(buildTransport()) {
+    ): SearchResult<Location> = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.GET,
@@ -52,20 +54,26 @@ class LocationsEmspClient(
                     correlationId = generateCorrelationId(),
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-        )
-            .parsePaginatedBody(offset)
+        ).let { res ->
+            if (ignoreInvalidListEntry) {
+                res.parseSearchResultIgnoringInvalid<Location, LocationPartial>(offset)
+            } else {
+                res.parseSearchResult<Location>(offset)
+            }
+        }
     }
 
     suspend fun getLocationsNextPage(
-        previousResponse: OcpiResponseBody<SearchResult<Location>>,
-    ): OcpiResponseBody<SearchResult<Location>>? = getNextPage(
+        previousResponse: SearchResult<Location>,
+    ): SearchResult<Location>? = getNextPage<Location, LocationPartial>(
         transportClientBuilder = transportClientBuilder,
         partnerId = partnerId,
         partnerRepository = partnerRepository,
         previousResponse = previousResponse,
+        ignoreInvalidListEntry = ignoreInvalidListEntry,
     )
 
-    override suspend fun getLocation(locationId: CiString): OcpiResponseBody<Location?> = with(buildTransport()) {
+    override suspend fun getLocation(locationId: CiString): Location? = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.GET,
@@ -77,10 +85,10 @@ class LocationsEmspClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .parseBody()
+            .parseOptionalResult()
     }
 
-    override suspend fun getEvse(locationId: CiString, evseUid: CiString): OcpiResponseBody<Evse?> =
+    override suspend fun getEvse(locationId: CiString, evseUid: CiString): Evse? =
         with(buildTransport()) {
             send(
                 HttpRequest(
@@ -93,14 +101,14 @@ class LocationsEmspClient(
                     )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
             )
-                .parseBody()
+                .parseOptionalResult()
         }
 
     override suspend fun getConnector(
         locationId: CiString,
         evseUid: CiString,
         connectorId: CiString,
-    ): OcpiResponseBody<Connector?> = with(buildTransport()) {
+    ): Connector? = with(buildTransport()) {
         send(
             HttpRequest(
                 method = HttpMethod.GET,
@@ -112,6 +120,6 @@ class LocationsEmspClient(
                 )
                 .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
         )
-            .parseBody()
+            .parseOptionalResult()
     }
 }

@@ -1,8 +1,8 @@
 package com.izivia.ocpi.toolkit.modules.chargingProfiles
 
 import com.izivia.ocpi.toolkit.common.OcpiSelfRegisteringModuleServer
-import com.izivia.ocpi.toolkit.common.httpResponse
-import com.izivia.ocpi.toolkit.common.mapper
+import com.izivia.ocpi.toolkit.common.TimeProvider
+import com.izivia.ocpi.toolkit.common.respondNothing
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ActiveChargingProfile
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ActiveChargingProfileResult
 import com.izivia.ocpi.toolkit.modules.chargingProfiles.domain.ChargingProfileResult
@@ -11,13 +11,17 @@ import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.MutableVersionsRepository
+import com.izivia.ocpi.toolkit.serialization.deserializeObject
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.TransportServer
 import com.izivia.ocpi.toolkit.transport.domain.FixedPathSegment
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.VariablePathSegment
+import java.time.Instant
 
 class ChargingProfilesScspServer(
     private val service: ChargingProfilesScspInterface,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
     versionsRepository: MutableVersionsRepository? = null,
     basePathOverride: String? = null,
 ) : OcpiSelfRegisteringModuleServer(
@@ -43,11 +47,11 @@ class ChargingProfilesScspServer(
                 VariablePathSegment("requestId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondNothing(timeProvider.now()) {
                 service
                     .postCallbackActiveChargingProfile(
                         requestId = req.pathParams["requestId"].orEmpty(),
-                        result = mapper.readValue(req.body, ActiveChargingProfileResult::class.java),
+                        result = mapper.deserializeObject<ActiveChargingProfileResult>(req.body),
                     )
             }
         }
@@ -59,11 +63,11 @@ class ChargingProfilesScspServer(
                 VariablePathSegment("requestId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondNothing(timeProvider.now()) {
                 service
                     .postCallbackChargingProfile(
                         requestId = req.pathParams["requestId"].orEmpty(),
-                        result = mapper.readValue(req.body, ChargingProfileResult::class.java),
+                        result = mapper.deserializeObject<ChargingProfileResult>(req.body),
                     )
             }
         }
@@ -75,11 +79,11 @@ class ChargingProfilesScspServer(
                 VariablePathSegment("requestId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondNothing(timeProvider.now()) {
                 service
                     .postCallbackClearProfile(
                         requestId = req.pathParams["requestId"].orEmpty(),
-                        result = mapper.readValue(req.body, ClearProfileResult::class.java),
+                        result = mapper.deserializeObject<ClearProfileResult>(req.body),
                     )
             }
         }
@@ -91,11 +95,11 @@ class ChargingProfilesScspServer(
                 VariablePathSegment("sessionId"),
             ),
         ) { req ->
-            req.httpResponse {
+            req.respondNothing(timeProvider.now()) {
                 service
                     .putActiveChargingProfile(
                         sessionId = req.pathParams["sessionId"].orEmpty(),
-                        activeChargingProfile = mapper.readValue(req.body, ActiveChargingProfile::class.java),
+                        activeChargingProfile = mapper.deserializeObject<ActiveChargingProfile>(req.body),
                     )
             }
         }

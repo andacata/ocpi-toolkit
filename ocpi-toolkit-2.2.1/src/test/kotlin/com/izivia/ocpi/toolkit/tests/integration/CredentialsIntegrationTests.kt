@@ -5,8 +5,10 @@ import com.izivia.ocpi.toolkit.modules.credentials.CredentialsServer
 import com.izivia.ocpi.toolkit.modules.credentials.domain.CredentialRole
 import com.izivia.ocpi.toolkit.modules.credentials.domain.Role
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.CredentialsRoleRepository
+import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
 import com.izivia.ocpi.toolkit.modules.credentials.services.CredentialsClientService
 import com.izivia.ocpi.toolkit.modules.credentials.services.CredentialsServerService
+import com.izivia.ocpi.toolkit.modules.credentials.services.PartnerProvider
 import com.izivia.ocpi.toolkit.modules.credentials.services.RequiredEndpoints
 import com.izivia.ocpi.toolkit.modules.locations.domain.BusinessDetails
 import com.izivia.ocpi.toolkit.modules.versions.VersionsClient
@@ -17,30 +19,34 @@ import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.InMemoryVersionsRepository
 import com.izivia.ocpi.toolkit.modules.versions.services.VersionsService
 import com.izivia.ocpi.toolkit.samples.common.*
+import com.izivia.ocpi.toolkit.serialization.OcpiSerializer
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.tests.integration.common.BaseServerIntegrationTest
 import com.izivia.ocpi.toolkit.tests.integration.mock.PartnerMongoRepository
+import com.izivia.ocpi.toolkit.transport.domain.HttpException
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
 import com.mongodb.client.MongoCollection
 import com.mongodb.client.MongoDatabase
 import kotlinx.coroutines.runBlocking
-import org.eclipse.jetty.client.HttpResponseException
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import org.litote.kmongo.eq
 import org.litote.kmongo.getCollection
 import strikt.api.expectCatching
+import strikt.api.expectDoesNotThrow
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.util.*
-import java.util.concurrent.ExecutionException
 
-class CredentialsIntegrationTests : BaseServerIntegrationTest() {
+class CredentialsIntegrationTests : BaseServerIntegrationTest(), TestWithSerializerProviders {
 
     data class ServerSetupResult(
         val transport: Http4kTransportServer,
         val partnerCollection: MongoCollection<Partner>,
+        val partnerRepository: PartnerRepository,
+        val partnerProvider: PartnerProvider,
         val versionsEndpoint: String,
     )
 
@@ -57,6 +63,7 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
 
         // Setup receiver (only server)
         val receiverPlatformRepo = PartnerMongoRepository(collection = receiverPartnerCollection)
+        val receiverPartnerProvider = PartnerProvider(receiverPlatformRepo)
         val receiverServer = buildTransportServer(receiverPlatformRepo)
         val receiverServerVersionsUrl = "${receiverServer.baseUrl}/versions"
         val receiverVersionsCacheRepository = InMemoryVersionsRepository()
@@ -74,7 +81,7 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                             ),
                         )
                     },
-                    transportClientBuilder = Http4kTransportClientBuilder(),
+                    transportClientBuilder = Http4kTransportClientBuilder(receiverPartnerProvider),
                     serverVersionsUrlProvider = { receiverServerVersionsUrl },
                     requiredEndpoints = requiredEndpoints,
                 ),
@@ -91,6 +98,8 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         return ServerSetupResult(
             transport = receiverServer,
             partnerCollection = receiverPartnerCollection,
+            partnerRepository = receiverPlatformRepo,
+            partnerProvider = receiverPartnerProvider,
             versionsEndpoint = receiverServerVersionsUrl,
         )
     }
@@ -99,13 +108,14 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         if (database == null) database = buildDBClient().getDatabase("ocpi-2-2-1-tests")
         val senderPartnerCollection = database!!
             .getCollection<Partner>("sender-server-${UUID.randomUUID()}")
+        val senderPartnerRepository = PartnerMongoRepository(collection = senderPartnerCollection)
 
         // Reset spy variables
         requestCounter = 1
         correlationCounter = 1
 
         // Setup sender (server)
-        val senderServer = buildTransportServer(PartnerMongoRepository(collection = senderPartnerCollection))
+        val senderServer = buildTransportServer(senderPartnerRepository)
         val senderServerVersionsUrl = "${senderServer.baseUrl}/versions"
 
         runBlocking {
@@ -120,6 +130,8 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         return ServerSetupResult(
             transport = senderServer,
             partnerCollection = senderPartnerCollection,
+            partnerRepository = senderPartnerRepository,
+            partnerProvider = PartnerProvider(senderPartnerRepository),
             versionsEndpoint = senderServerVersionsUrl,
         )
     }
@@ -132,7 +144,7 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         // Setup sender (client)
         return CredentialsClientService(
             clientVersionsEndpointUrl = senderServerSetupResult.versionsEndpoint,
-            clientPartnerRepository = PartnerMongoRepository(collection = senderServerSetupResult.partnerCollection),
+            clientPartnerRepository = senderServerSetupResult.partnerRepository,
             clientVersionsRepository = VersionsCacheRepository(baseUrl = senderServerSetupResult.transport.baseUrl),
             clientCredentialsRoleRepository = object : CredentialsRoleRepository {
                 override suspend fun getCredentialsRoles(partnerId: String): List<CredentialRole> = listOf(
@@ -145,13 +157,15 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                 )
             },
             partnerId = receiverServerSetupResult.versionsEndpoint,
-            transportClientBuilder = Http4kTransportClientBuilder(),
+            transportClientBuilder = Http4kTransportClientBuilder(senderServerSetupResult.partnerProvider),
             requiredEndpoints = requiredEndpoints,
         )
     }
 
-    @Test
-    fun `should not properly run registration because wrong setup of token A`() {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should not properly run registration because wrong setup of token A`(serializer: OcpiSerializer) {
+        mapper = serializer
         val receiverServer = setupReceiver()
         val senderServer = setupSender()
 
@@ -170,7 +184,9 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         // Fails because the senders does not know the TOKEN_A to send with the request
         expectCatching {
             credentialsClientService.register()
-        }.isFailure().isA<OcpiClientInvalidParametersException>()
+        }
+            .isFailure()
+            .isA<OcpiClientInvalidParametersException>()
 
         receiverServer.partnerCollection.deleteOne(Partner::url eq senderServer.versionsEndpoint)
         senderServer.partnerCollection.insertOne(Partner(url = receiverServer.versionsEndpoint, tokenA = tokenA))
@@ -180,10 +196,8 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
             credentialsClientService.register()
         }
             .isFailure()
-            .isA<ExecutionException>()
-            .get { this.cause }
-            .isA<HttpResponseException>()
-            .get { this.response.status }
+            .isA<HttpException>()
+            .get { status.code }
             .isEqualTo(HttpStatus.UNAUTHORIZED.code)
 
         receiverServer.partnerCollection.deleteOne(Partner::url eq senderServer.versionsEndpoint)
@@ -199,15 +213,17 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
             credentialsClientService.register()
         }
             .isFailure()
-            .isA<ExecutionException>()
-            .get { this.cause }
-            .isA<HttpResponseException>()
-            .get { this.response.status }
+            .isA<HttpException>()
+            .get { status.code }
             .isEqualTo(HttpStatus.UNAUTHORIZED.code)
     }
 
-    @Test
-    fun `should access versions module properly with token A and return right errors when needed`() {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should access versions module properly with token A and return right errors when needed`(
+        serializer: OcpiSerializer,
+    ) {
+        mapper = serializer
         val receiverServer = setupReceiver()
         val senderServer = setupSender()
 
@@ -221,9 +237,9 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         // We don't need to register, we will use TOKEN_A for our requests
 
         val versionsClient = VersionsClient(
-            transportClientBuilder = Http4kTransportClientBuilder(),
+            transportClientBuilder = Http4kTransportClientBuilder(receiverServer.partnerProvider),
             partnerId = receiverServer.versionsEndpoint,
-            partnerRepository = PartnerMongoRepository(collection = senderServer.partnerCollection),
+            partnerRepository = senderServer.partnerRepository,
         )
 
         expectThat(
@@ -231,25 +247,24 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                 versionsClient.getVersions()
             },
         ) {
-            get { data }
-                .isNotNull()
-                .isNotEmpty()
-                .isEqualTo(
-                    listOf(
-                        Version(
-                            version = VersionNumber.V2_2_1.value,
-                            url = "${receiverServer.transport.baseUrl}/2.2.1",
-                        ),
+            isNotEmpty()
+            isEqualTo(
+                listOf(
+                    Version(
+                        version = VersionNumber.V2_2_1.value,
+                        url = "${receiverServer.transport.baseUrl}/2.2.1",
                     ),
-                )
-
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+                ),
+            )
         }
     }
 
-    @Test
-    fun `should not properly run registration process because required endpoints are missing`() {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should not properly run registration process because required endpoints are missing`(
+        serializer: OcpiSerializer,
+    ) {
+        mapper = serializer
         val receiverServer = setupReceiver(
             RequiredEndpoints(
                 receiver = listOf(ModuleID.credentials, ModuleID.locations),
@@ -273,20 +288,21 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         receiverServer.transport.start()
         senderServer.transport.start()
 
-        expectThat(
-            assertThrows<OcpiResponseException> {
-                runBlocking {
-                    credentialsClientService.register()
-                }
-            },
-        ) {
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SERVER_NO_MATCHING_ENDPOINTS.code)
+        expectThrows<OcpiException> {
+            runBlocking {
+                credentialsClientService.register()
+            }
+        }.and {
+            get { ocpiStatus }.isEqualTo(OcpiStatus.SERVER_NO_MATCHING_ENDPOINTS)
         }
     }
 
-    @Test
-    fun `should properly run registration process then correct get credentials from receiver`() {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should properly run registration process then correct get credentials from receiver`(
+        serializer: OcpiSerializer,
+    ) {
+        mapper = serializer
         val receiverServer = setupReceiver()
         val senderServer = setupSender()
 
@@ -420,8 +436,12 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         ).isEqualTo(credentials)
     }
 
-    @Test
-    fun `should properly run registration process then run update properly`() = runBlocking {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should properly run registration process then run update properly`(
+        serializer: OcpiSerializer,
+    ) = runBlocking {
+        mapper = serializer
         val receiverServer = setupReceiver()
         val senderServer = setupSender()
 
@@ -444,33 +464,32 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         credentialsClientService.update()
 
         val versionsClient = VersionsClient(
-            transportClientBuilder = Http4kTransportClientBuilder(),
+            transportClientBuilder = Http4kTransportClientBuilder(senderServer.partnerProvider),
             partnerId = receiverServer.versionsEndpoint,
-            partnerRepository = PartnerMongoRepository(collection = senderServer.partnerCollection),
+            partnerRepository = senderServer.partnerRepository,
         )
 
         expectThat(
             versionsClient.getVersions(),
         ) {
-            get { data }
-                .isNotNull()
-                .isNotEmpty()
-                .isEqualTo(
-                    listOf(
-                        Version(
-                            version = VersionNumber.V2_2_1.value,
-                            url = "${receiverServer.transport.baseUrl}/2.2.1",
-                        ),
+            isNotEmpty()
+            isEqualTo(
+                listOf(
+                    Version(
+                        version = VersionNumber.V2_2_1.value,
+                        url = "${receiverServer.transport.baseUrl}/2.2.1",
                     ),
-                )
-
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+                ),
+            )
         }
     }
 
-    @Test
-    fun `should properly run registration process then delete credentials properly then re-register`() {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should properly run registration process then delete credentials properly then re-register`(
+        serializer: OcpiSerializer,
+    ) {
+        mapper = serializer
         val receiverServer = setupReceiver()
         val senderServer = setupSender()
 
@@ -494,14 +513,14 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         }
 
         val senderVersionsClient = VersionsClient(
-            transportClientBuilder = Http4kTransportClientBuilder(),
+            transportClientBuilder = Http4kTransportClientBuilder(senderServer.partnerProvider),
             partnerId = receiverServer.versionsEndpoint,
-            partnerRepository = PartnerMongoRepository(collection = senderServer.partnerCollection),
+            partnerRepository = senderServer.partnerRepository,
         )
         val receiverVersionsClient = VersionsClient(
-            transportClientBuilder = Http4kTransportClientBuilder(),
+            transportClientBuilder = Http4kTransportClientBuilder(receiverServer.partnerProvider),
             partnerId = senderServer.versionsEndpoint,
-            partnerRepository = PartnerMongoRepository(collection = receiverServer.partnerCollection),
+            partnerRepository = receiverServer.partnerRepository,
         )
 
         expectThat(
@@ -509,20 +528,15 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                 senderVersionsClient.getVersions()
             },
         ) {
-            get { data }
-                .isNotNull()
-                .isNotEmpty()
-                .isEqualTo(
-                    listOf(
-                        Version(
-                            version = VersionNumber.V2_2_1.value,
-                            url = "${receiverServer.transport.baseUrl}/2.2.1",
-                        ),
+            isNotEmpty()
+            isEqualTo(
+                listOf(
+                    Version(
+                        version = VersionNumber.V2_2_1.value,
+                        url = "${receiverServer.transport.baseUrl}/2.2.1",
                     ),
-                )
-
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+                ),
+            )
         }
 
         // Sender unregisters, so ...
@@ -549,20 +563,15 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                 receiverVersionsClient.getVersions()
             },
         ) {
-            get { data }
-                .isNotNull()
-                .isNotEmpty()
-                .isEqualTo(
-                    listOf(
-                        Version(
-                            version = VersionNumber.V2_2_1.value,
-                            url = "${senderServer.transport.baseUrl}/2.2.1",
-                        ),
+            isNotEmpty()
+            isEqualTo(
+                listOf(
+                    Version(
+                        version = VersionNumber.V2_2_1.value,
+                        url = "${senderServer.transport.baseUrl}/2.2.1",
                     ),
-                )
-
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+                ),
+            )
         }
 
         // ... and sender can obviously still send requests
@@ -571,25 +580,22 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                 senderVersionsClient.getVersions()
             },
         ) {
-            get { data }
-                .isNotNull()
-                .isNotEmpty()
-                .isEqualTo(
-                    listOf(
-                        Version(
-                            version = VersionNumber.V2_2_1.value,
-                            url = "${receiverServer.transport.baseUrl}/2.2.1",
-                        ),
+            isNotEmpty()
+            isEqualTo(
+                listOf(
+                    Version(
+                        version = VersionNumber.V2_2_1.value,
+                        url = "${receiverServer.transport.baseUrl}/2.2.1",
                     ),
-                )
-
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+                ),
+            )
         }
     }
 
-    @Test
-    fun `should properly run registration process then get, update, delete properly`() {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should properly run registration process then get, update, delete properly`(serializer: OcpiSerializer) {
+        mapper = serializer
         val receiverServer = setupReceiver()
         val senderServer = setupSender()
 
@@ -611,14 +617,14 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         val credentialsAfterRegistration = runBlocking { senderCredentialsClientService.register() }
 
         val senderVersionsClient = VersionsClient(
-            transportClientBuilder = Http4kTransportClientBuilder(),
+            transportClientBuilder = Http4kTransportClientBuilder(senderServer.partnerProvider),
             partnerId = receiverServer.versionsEndpoint,
-            partnerRepository = PartnerMongoRepository(collection = senderServer.partnerCollection),
+            partnerRepository = senderServer.partnerRepository,
         )
         val receiverVersionsClient = VersionsClient(
-            transportClientBuilder = Http4kTransportClientBuilder(),
+            transportClientBuilder = Http4kTransportClientBuilder(receiverServer.partnerProvider),
             partnerId = senderServer.versionsEndpoint,
-            partnerRepository = PartnerMongoRepository(collection = receiverServer.partnerCollection),
+            partnerRepository = receiverServer.partnerRepository,
         )
 
         expectThat(
@@ -626,20 +632,15 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                 senderVersionsClient.getVersions()
             },
         ) {
-            get { data }
-                .isNotNull()
-                .isNotEmpty()
-                .isEqualTo(
-                    listOf(
-                        Version(
-                            version = VersionNumber.V2_2_1.value,
-                            url = "${receiverServer.transport.baseUrl}/2.2.1",
-                        ),
+            isNotEmpty()
+            isEqualTo(
+                listOf(
+                    Version(
+                        version = VersionNumber.V2_2_1.value,
+                        url = "${receiverServer.transport.baseUrl}/2.2.1",
                     ),
-                )
-
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+                ),
+            )
         }
 
         expectThat(
@@ -657,20 +658,15 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
                 senderVersionsClient.getVersions()
             },
         ) {
-            get { data }
-                .isNotNull()
-                .isNotEmpty()
-                .isEqualTo(
-                    listOf(
-                        Version(
-                            version = VersionNumber.V2_2_1.value,
-                            url = "${receiverServer.transport.baseUrl}/2.2.1",
-                        ),
+            isNotEmpty()
+            isEqualTo(
+                listOf(
+                    Version(
+                        version = VersionNumber.V2_2_1.value,
+                        url = "${receiverServer.transport.baseUrl}/2.2.1",
                     ),
-                )
-
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+                ),
+            )
         }
 
         // Sender unregisters, so ...
@@ -687,13 +683,10 @@ class CredentialsIntegrationTests : BaseServerIntegrationTest() {
         }
 
         // ... and sender should still be able to call receiver
-        expectThat(
+        expectDoesNotThrow {
             runBlocking {
                 senderVersionsClient.getVersions()
-            },
-        ) {
-            get { statusCode }
-                .isEqualTo(OcpiStatus.SUCCESS.code)
+            }
         }
     }
 }

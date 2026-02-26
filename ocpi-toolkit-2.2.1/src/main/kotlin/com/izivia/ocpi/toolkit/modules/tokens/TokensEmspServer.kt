@@ -1,14 +1,15 @@
 package com.izivia.ocpi.toolkit.modules.tokens
 
-import com.izivia.ocpi.toolkit.common.OcpiSelfRegisteringModuleServer
-import com.izivia.ocpi.toolkit.common.httpResponse
-import com.izivia.ocpi.toolkit.common.mapper
+import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.tokens.domain.LocationReferences
+import com.izivia.ocpi.toolkit.modules.tokens.domain.Token
 import com.izivia.ocpi.toolkit.modules.tokens.domain.TokenType
 import com.izivia.ocpi.toolkit.modules.versions.domain.InterfaceRole
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
 import com.izivia.ocpi.toolkit.modules.versions.domain.VersionNumber
 import com.izivia.ocpi.toolkit.modules.versions.repositories.MutableVersionsRepository
+import com.izivia.ocpi.toolkit.serialization.deserializeObject
+import com.izivia.ocpi.toolkit.serialization.mapper
 import com.izivia.ocpi.toolkit.transport.TransportServer
 import com.izivia.ocpi.toolkit.transport.domain.FixedPathSegment
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
@@ -17,6 +18,7 @@ import java.time.Instant
 
 class TokensEmspServer(
     private val service: TokensEmspInterface,
+    private val timeProvider: TimeProvider = TimeProvider { Instant.now() },
     versionsRepository: MutableVersionsRepository? = null,
     basePathOverride: String? = null,
 ) : OcpiSelfRegisteringModuleServer(
@@ -34,16 +36,13 @@ class TokensEmspServer(
             path = basePathSegments,
             queryParams = listOf("date_from", "date_to", "offset", "limit"),
         ) { req ->
-            req.httpResponse {
-                val dateFrom = req.queryParams["date_from"]
-                val dateTo = req.queryParams["date_to"]
-
+            req.respondSearchResult<Token>(timeProvider.now()) {
                 service
                     .getTokens(
-                        dateFrom = dateFrom?.let { Instant.parse(it) },
-                        dateTo = dateTo?.let { Instant.parse(it) },
-                        offset = req.queryParams["offset"]?.toInt() ?: 0,
-                        limit = req.queryParams["limit"]?.toInt(),
+                        dateFrom = req.optionalQueryParamAsInstant("date_from"),
+                        dateTo = req.optionalQueryParamAsInstant("date_to"),
+                        offset = req.optionalQueryParamAsInt("offset") ?: 0,
+                        limit = req.optionalQueryParamAsInt("limit"),
                     )
             }
         }
@@ -57,13 +56,13 @@ class TokensEmspServer(
             ),
             queryParams = listOf("type"),
         ) { req ->
-            req.httpResponse {
+            req.respondObject(timeProvider.now()) {
                 service.postToken(
-                    tokenUid = req.pathParams["tokenUid"]!!,
-                    type = req.queryParams["type"]?.let { enumValueOf<TokenType>(it) } ?: TokenType.RFID,
+                    tokenUid = req.pathParam("tokenUid"),
+                    type = req.optionalQueryParamAs("type", TokenType::valueOf) ?: TokenType.RFID,
                     locationReferences = req.body
                         ?.takeIf { it.isNotBlank() } // During Test if client sent body = null, this reiceve body=""
-                        ?.let { mapper.readValue(it, LocationReferences::class.java) },
+                        ?.let { mapper.deserializeObject<LocationReferences>(it) },
                 )
             }
         }

@@ -33,4 +33,10 @@ enum class ParkingType {
      * Multistory car park, mainly underground.
      */
     UNDERGROUND_GARAGE,
+
+    /**
+     * Placeholder entry serving as default value if we can not match with any other.
+     * Avoids failing deserialization on invalid entries.
+     */
+    OTHER,
 }

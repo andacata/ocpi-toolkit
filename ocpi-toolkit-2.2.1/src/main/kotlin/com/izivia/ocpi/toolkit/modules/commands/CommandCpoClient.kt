@@ -3,7 +3,8 @@ package com.izivia.ocpi.toolkit.modules.commands
 import com.izivia.ocpi.toolkit.common.*
 import com.izivia.ocpi.toolkit.modules.commands.domain.CommandResult
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpRequest
 
@@ -15,19 +16,19 @@ class CommandCpoClient(
         commandResult: CommandResult,
         partnerId: String,
         responseUrl: String,
-    ): OcpiResponseBody<Any> =
+    ) =
         transportClientBuilder
             .build(responseUrl)
             .send(
                 HttpRequest(
                     method = HttpMethod.POST,
                     path = "",
-                    body = mapper.writeValueAsString(commandResult),
+                    body = mapper.serializeObject(commandResult),
                 )
                     .withRequiredHeaders(
                         requestId = generateUUIDv4Token(),
                         correlationId = generateUUIDv4Token(),
                     )
                     .authenticate(partnerRepository = partnerRepository, partnerId = partnerId),
-            ).parseBody()
+            ).parseResultOrNull<String>()
 }

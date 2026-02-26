@@ -1,32 +1,32 @@
 package com.izivia.ocpi.toolkit.modules.tokens.http.cpo
 
-import com.izivia.ocpi.toolkit.common.OcpiResponseBody
-import com.izivia.ocpi.toolkit.common.mapper
+import com.izivia.ocpi.toolkit.common.TestWithSerializerProviders
 import com.izivia.ocpi.toolkit.modules.buildHttpRequest
 import com.izivia.ocpi.toolkit.modules.isJsonEqualTo
 import com.izivia.ocpi.toolkit.modules.sessions.domain.ProfileType
-import com.izivia.ocpi.toolkit.modules.tokens.TokensCpoServer
 import com.izivia.ocpi.toolkit.modules.tokens.domain.*
 import com.izivia.ocpi.toolkit.modules.tokens.repositories.TokensCpoRepository
-import com.izivia.ocpi.toolkit.modules.tokens.services.TokensCpoService
-import com.izivia.ocpi.toolkit.modules.versions.repositories.InMemoryVersionsRepository
-import com.izivia.ocpi.toolkit.samples.common.Http4kTransportServer
-import com.izivia.ocpi.toolkit.transport.TransportClient
+import com.izivia.ocpi.toolkit.serialization.OcpiSerializer
+import com.izivia.ocpi.toolkit.serialization.mapper
+import com.izivia.ocpi.toolkit.serialization.serializeObject
 import com.izivia.ocpi.toolkit.transport.domain.HttpMethod
 import com.izivia.ocpi.toolkit.transport.domain.HttpResponse
 import com.izivia.ocpi.toolkit.transport.domain.HttpStatus
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
+import strikt.assertions.isNotNull
 import java.time.Instant
 
-class TokensCpoHttpPatchTokenTest {
-    @Test
-    fun `should patch token`() {
+class TokensCpoHttpPatchTokenTest : TestWithSerializerProviders {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should patch token`(serializer: OcpiSerializer) {
+        mapper = serializer
         val token = Token(
             countryCode = "DE",
             partyId = "TNM",
@@ -64,11 +64,10 @@ class TokensCpoHttpPatchTokenTest {
                 )
             } coAnswers { token }
         }.buildServer()
-        OcpiResponseBody.now = { Instant.parse("2015-06-30T21:59:59Z") }
 
         // when
         val resp: HttpResponse = srv.send(
-            buildHttpRequest(HttpMethod.PATCH, "/tokens/DE/TNM/012345678/?type=RFID", mapper.writeValueAsString(token)),
+            buildHttpRequest(HttpMethod.PATCH, "/tokens/DE/TNM/012345678/?type=RFID", mapper.serializeObject(token)),
         )
 
         // then
@@ -80,20 +79,41 @@ class TokensCpoHttpPatchTokenTest {
         }
         expectThat(resp) {
             get { status }.isEqualTo(HttpStatus.OK)
-            get { body }.isJsonEqualTo(
+            get { body }.isNotNull().isJsonEqualTo(
                 """
                 {
                     "status_code": 1000,
                     "status_message": "Success",
-                    "timestamp": "2015-06-30T21:59:59Z"
+                    "timestamp": "2015-06-30T21:59:59Z",
+                    "data":  {
+                        "country_code" : "DE",
+                        "party_id" : "TNM",
+                        "uid" : "12345678905880",
+                        "type" : "RFID",
+                        "contract_id" : "DE8ACC12E46L89",
+                        "visual_number" : "DF000-2001-8999-1",
+                        "issuer" : "TheNewMotion",
+                        "group_id" : "DF000-2001-8999",
+                        "valid" : true,
+                        "whitelist" : "ALLOWED",
+                        "language" : "it",
+                        "default_profile_type" : "GREEN",
+                        "energy_contract" : {
+                          "supplier_name" : "Greenpeace Energy eG",
+                          "contract_id" : "0123456789"
+                        },
+                        "last_updated" : "2018-12-10T17:25:10Z"
+                      }
                 }
                 """.trimIndent(),
             )
         }
     }
 
-    @Test
-    fun `should patch partial token`() {
+    @ParameterizedTest
+    @MethodSource("getAvailableOcpiSerializers")
+    fun `should patch partial token`(serializer: OcpiSerializer) {
+        mapper = serializer
         val token = Token(
             countryCode = "DE",
             partyId = "TNM",
@@ -154,14 +174,13 @@ class TokensCpoHttpPatchTokenTest {
                 )
             } coAnswers { token }
         }.buildServer()
-        OcpiResponseBody.now = { Instant.parse("2015-06-30T21:59:59Z") }
 
         // when
         val resp: HttpResponse = srv.send(
             buildHttpRequest(
                 HttpMethod.PATCH,
                 "/tokens/DE/TNM/012345678/?type=RFID",
-                mapper.writeValueAsString(partialToken),
+                mapper.serializeObject(partialToken),
             ),
         )
 
@@ -174,29 +193,34 @@ class TokensCpoHttpPatchTokenTest {
         }
         expectThat(resp) {
             get { status }.isEqualTo(HttpStatus.OK)
-            get { body }.isJsonEqualTo(
+            get { body }.isNotNull().isJsonEqualTo(
                 """
                 {
                     "status_code": 1000,
                     "status_message": "Success",
-                    "timestamp": "2015-06-30T21:59:59Z"
+                    "timestamp": "2015-06-30T21:59:59Z",
+                    "data" : {
+                        "country_code" : "DE",
+                        "party_id" : "TNM",
+                        "uid" : "12345678905880",
+                        "type" : "RFID",
+                        "contract_id" : "DE8ACC12E46L89",
+                        "visual_number" : "DF000-2001-8999-1",
+                        "issuer" : "TheNewMotion",
+                        "group_id" : "DF000-2001-8999",
+                        "valid" : true,
+                        "whitelist" : "ALLOWED",
+                        "language" : "it",
+                        "default_profile_type" : "GREEN",
+                        "energy_contract" : {
+                          "supplier_name" : "Greenpeace Energy eG",
+                          "contract_id" : "0123456789"
+                        },
+                        "last_updated" : "2018-12-10T17:25:10Z"
+                    }
                 }
                 """.trimIndent(),
             )
         }
     }
-}
-
-private fun TokensCpoRepository.buildServer(): TransportClient {
-    val transportServer = Http4kTransportServer("http://localhost:1234", 1234)
-    val repo = this
-    runBlocking {
-        TokensCpoServer(
-            service = TokensCpoService(repo),
-            versionsRepository = InMemoryVersionsRepository(),
-            basePathOverride = "/tokens",
-        ).registerOn(transportServer)
-    }
-
-    return transportServer.initRouterAndBuildClient()
 }

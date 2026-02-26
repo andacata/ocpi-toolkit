@@ -1,17 +1,17 @@
 package com.izivia.ocpi.toolkit.common
 
-import com.fasterxml.jackson.core.type.TypeReference
 import com.izivia.ocpi.toolkit.common.Header.OCPI_FROM_COUNTRY_CODE
 import com.izivia.ocpi.toolkit.common.Header.OCPI_FROM_PARTY_ID
 import com.izivia.ocpi.toolkit.common.Header.OCPI_TO_COUNTRY_CODE
 import com.izivia.ocpi.toolkit.common.Header.OCPI_TO_PARTY_ID
-import com.izivia.ocpi.toolkit.common.context.*
+import com.izivia.ocpi.toolkit.common.context.RequestMessageRoutingHeaders
+import com.izivia.ocpi.toolkit.common.context.ResponseMessageRoutingHeaders
+import com.izivia.ocpi.toolkit.common.context.TokenHeader
+import com.izivia.ocpi.toolkit.common.context.currentRequestMessageRoutingHeadersOrNull
 import com.izivia.ocpi.toolkit.common.validation.validate
 import com.izivia.ocpi.toolkit.common.validation.validateLength
 import com.izivia.ocpi.toolkit.modules.credentials.repositories.PartnerRepository
 import com.izivia.ocpi.toolkit.modules.versions.domain.ModuleID
-import com.izivia.ocpi.toolkit.transport.TransportClient
-import com.izivia.ocpi.toolkit.transport.TransportClientBuilder
 import com.izivia.ocpi.toolkit.transport.domain.*
 import java.util.*
 
@@ -24,6 +24,7 @@ object Header {
     const val X_TOTAL_COUNT = "X-Total-Count"
     const val X_LIMIT = "X-Limit"
     const val LINK = "Link"
+    const val LOCATION = "Location"
     const val CONTENT_TYPE = "Content-Type"
     const val OCPI_TO_PARTY_ID = "OCPI-to-party-id"
     const val OCPI_TO_COUNTRY_CODE = "OCPI-to-country-code"
@@ -43,39 +44,6 @@ fun Map<String, String>.validateMessageRoutingHeaders() {
         validateLength(OCPI_FROM_COUNTRY_CODE, getByNormalizedKey(OCPI_FROM_COUNTRY_CODE).orEmpty(), 2)
     }
 }
-
-/**
- * Parse body of a paginated request. The result will be stored in a SearchResult which contains all pagination
- * information.
- * @param offset
- */
-inline fun <reified T> HttpResponse.parsePaginatedBody(offset: Int): OcpiResponseBody<SearchResult<T>> =
-    mapper.readValue(body, object : TypeReference<OcpiResponseBody<List<T>>>() {})
-        .let { parsedBody ->
-            OcpiResponseBody(
-                data = parsedBody.data?.toSearchResult(
-                    totalCount = getHeader(Header.X_TOTAL_COUNT)?.toInt()
-                        ?: throw OcpiToolkitMissingRequiredResponseHeaderException(Header.X_TOTAL_COUNT),
-                    limit = getHeader(Header.X_LIMIT)?.toInt()
-                        ?: throw OcpiToolkitMissingRequiredResponseHeaderException(Header.X_LIMIT),
-                    offset = offset,
-                    nextPageUrl = getHeader(Header.LINK)?.split("<")?.elementAtOrNull(1)?.split(">")?.first(),
-                ),
-                statusCode = parsedBody.statusCode,
-                statusMessage = parsedBody.statusMessage,
-                timestamp = parsedBody.timestamp,
-            )
-        }
-
-/**
- * Parses the body of the given HttpResponse to the specified type
- *
- * @throws StreamReadException – if underlying input contains invalid content of type JsonParser supports (JSON for
- * default case)
- * @throws DatabindException – if the input JSON structure does not match structure expected for result type (or has
- * other mismatch issues)
- */
-inline fun <reified T> HttpResponse.parseBody(): T = mapper.readValue(body!!, object : TypeReference<T>() {})
 
 /**
  * Encode a string in base64, also @see String#decodeBase64()
@@ -107,12 +75,12 @@ suspend fun PartnerRepository.buildAuthorizationHeader(
     if (allowTokenA) {
         getCredentialsClientToken(partnerId = partnerId)
             ?: getCredentialsTokenA(partnerId = partnerId)
-            ?: throw throw OcpiClientUnknownTokenException(
+            ?: throw OcpiClientUnknownTokenException(
                 "Could not find token A or client token associated with partner $partnerId",
             )
     } else {
         getCredentialsClientToken(partnerId = partnerId)
-            ?: throw throw OcpiClientUnknownTokenException(
+            ?: throw OcpiClientUnknownTokenException(
                 "Could not find client token associated with partner $partnerId",
             )
     }
@@ -378,14 +346,3 @@ suspend fun PartnerRepository.checkToken(
         throw HttpException(HttpStatus.UNAUTHORIZED, "Invalid server token (token A allowed: $allowTokenA)")
     }
 }
-
-suspend fun TransportClientBuilder.buildFor(
-    module: ModuleID,
-    partnerId: String,
-    partnerRepository: PartnerRepository,
-): TransportClient =
-    partnerRepository
-        .getEndpoints(partnerId = partnerId)
-        .find { it.identifier == module }
-        ?.let { build(baseUrl = it.url) }
-        ?: throw OcpiToolkitUnknownEndpointException(endpointName = module.name)
